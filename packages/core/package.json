@@ -1,0 +1,15 @@
+{
+  "name": "@data-analysis/core",
+  "version": "1.0.0",
+  "license": "MIT",
+  "private": true,
+  "devDependencies": {
+    "@types/big.js": "^6.1.2"
+  },
+  "dependencies": {
+    "@data-analysis/types": "^1.0.0",
+    "big.js": "6.1.1",
+    "rxjs": "^7.4.0",
+    "trading-signals": "^3.6.0"
+  }
+}

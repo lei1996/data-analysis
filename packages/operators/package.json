@@ -1,0 +1,11 @@
+{
+  "name": "@data-analysis/operators",
+  "version": "1.0.0",
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "@data-analysis/core": "^1.0.0",
+    "@data-analysis/types": "^1.0.0",
+    "@data-analysis/utils": "^1.0.0"
+  }
+}

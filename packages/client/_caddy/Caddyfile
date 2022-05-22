@@ -1,0 +1,13 @@
+# generated 2021-09-28, Mozilla Guideline v5.6, Caddy 2.1.1, intermediate configuration
+# https://ssl-config.mozilla.org/#server=caddy&version=2.1.1&config=intermediate&guideline=5.6
+# note that Caddy automatically configures safe TLS settings
+
+# replace example.com with your domain name
+# caddy 作为docker 里面的子容器，需要开放所有的端口链接, 不然反向代理访问不到里面的页面
+:80 {
+    root * /usr/share/caddy
+
+    encode zstd gzip
+    templates
+    file_server browse
+}

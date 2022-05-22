@@ -1,0 +1,13 @@
+{
+  "name": "@data-analysis/crypto-binance",
+  "version": "1.0.0",
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "@data-analysis/core": "^1.0.0",
+    "@data-analysis/operators": "^1.0.0",
+    "@data-analysis/types": "^1.0.0",
+    "@data-analysis/utils": "^1.0.0",
+    "binance-api-node": "^0.11.22"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "name": "data-analysis",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/FinanceFree/data-analysis.git",
+  "author": "lei1996 <s617218165@gmail.com>",
+  "private": true,
+  "scripts": {
+    "dev:server": "lerna run dev:server --stream",
+    "start:server": "lerna run start:server --stream",
+    "dev:huobi": "lerna run dev:huobi --stream",
+    "start:huobi": "lerna run start:huobi --stream",
+    "dev:binance": "lerna run dev:binance --stream",
+    "start:binance": "lerna run start:binance --stream",
+    "dev:crypto": "lerna run dev:crypto --stream",
+    "start:crypto": "lerna run start:crypto --stream",
+    "dev:ftxdepth": "lerna run dev:ftxdepth --stream",
+    "start:ftxdepth": "lerna run start:ftxdepth --stream",
+    "dev:operTest": "lerna run dev:operTest --stream",
+    "start:operTest": "lerna run start:operTest --stream",
+    "dev:cron": "lerna run dev:cron --stream",
+    "start:cron": "lerna run start:cron --stream",
+    "dev:client": "lerna run dev:client --stream",
+    "build:client": "lerna run build:client --stream",
+    "lint": "eslint ./ --ext ts,tsx --ignore-pattern .eslintignore --cache --fix",
+    "ts-check": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "install": "npx lerna bootstrap"
+  },
+  "engines": {
+    "node": ">= 14"
+  },
+  "devDependencies": {
+    "@types/jest": "^27.0.1",
+    "@typescript-eslint/eslint-plugin": "^4.28.5",
+    "@typescript-eslint/parser": "^4.28.5",
+    "eslint": "^7.32.0",
+    "eslint-config-airbnb": "^18.2.1",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-import": "^2.23.4",
+    "eslint-plugin-jest": "^24.4.0",
+    "eslint-plugin-jsx-a11y": "^6.4.1",
+    "eslint-plugin-react": "^7.24.0",
+    "eslint-plugin-react-hooks": "^4.2.0",
+    "jest": "^27.1.0",
+    "lerna": "^4.0.0",
+    "ts-jest": "^27.0.5",
+    "ts-node": "^10.1.0",
+    "typescript": "^4.3.5"
+  }
+}

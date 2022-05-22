@@ -1,0 +1,14 @@
+{
+  "name": "@data-analysis/database",
+  "version": "1.0.0",
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "mongoose": "^6.0.6",
+    "mongoose-paginate-v2": "^1.4.2"
+  },
+  "devDependencies": {
+    "@types/mongoose": "^5.11.97",
+    "@types/mongoose-paginate-v2": "^1.3.11"
+  }
+}
