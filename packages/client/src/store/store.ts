@@ -96,7 +96,7 @@ class Store {
   profitLists: ProfitObjectInterface[] = [];
   isRandom: boolean = true;
   maxOpenLimit: number = 1;
-  symbolLength: number = 1900;
+  symbolLength: number = 400;
 
   constructor() {
     // this.fetchExchangeInfoData();
@@ -276,23 +276,16 @@ class Store {
           }).pipe(
             concatMap((x: KLineBaseInterface[]) => {
               console.log('查看渲染次数');
+              let kline: any = {};
               const share$ = from(x).pipe(
                 concatMap((x) => of(x).pipe(delay(20))),
-                share(),
-              );
-              const macdShare$ = share$.pipe(
+                tap((x) => kline = x),
                 makeSuObservable(14),
-                share(),
+                concatMap((info) => of({ info, close: kline.close })),
               );
-              // const momShare$ = share$.pipe(makeMomExObservable(14), share());
-              // const rsiShare$ = share$.pipe(makeRsiObservable(14), share());
 
-              return zip(
-                macdShare$,
-                // rsiShare$.pipe(autoRsiExTestOperator(300, 'Rsi'), commonPipe()),
-              );
+              return share$;
             }),
-            // this.computeResultPipe(symbol),
           );
         }),
         // toArray(),

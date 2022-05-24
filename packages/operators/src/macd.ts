@@ -16,8 +16,8 @@ import { OperatorInterface } from './types/macd';
 
 export const makeSuObservable = (interval: number) => {
   return (observable: Observable<KLineBaseInterface>) =>
-    new Observable<[KLineBaseInterface]>(
-      (subscriber: Subscriber<[KLineBaseInterface]>) => {
+    new Observable<string>(
+      (subscriber: Subscriber<string>) => {
         let macdIndicator = new MACD({
           indicator: EMA,
           shortInterval: 6,
@@ -69,6 +69,7 @@ export const makeSuObservable = (interval: number) => {
           .subscribe({
             next(item) {
               console.log('多头', item);
+              subscriber.next(item);
             },
             error(err) {
               // We need to make sure we're propagating our errors through.
