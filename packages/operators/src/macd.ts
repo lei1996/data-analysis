@@ -8,8 +8,11 @@ import {
   Subscriber,
   concatMap,
   of,
+  Big,
 } from '@data-analysis/core';
 import { KLineBaseInterface } from '@data-analysis/types/kline.type';
+import { Prev } from './base';
+import { OperatorInterface } from './types/macd';
 
 export const makeSuObservable = (interval: number) => {
   return (observable: Observable<KLineBaseInterface>) =>
@@ -79,3 +82,44 @@ export const makeSuObservable = (interval: number) => {
       },
     );
 };
+
+export const buyOperator = () => {
+  return (observable: Observable<OperatorInterface>) =>
+    new Observable<string>((subscriber: Subscriber<string>) => {
+      let prev: Prev = '';
+
+      const subscription = observable.subscribe({
+        next({ result, best }) {
+          let info: string = '';
+
+          const [upper, lower] = best;
+          const hist = new Big(result);
+
+          if (hist.gt(upper) && (prev === 'DOWN' || prev === '')) {
+            info = '平空';
+            prev = 'UP';
+          } else if (hist.lt(lower) && (prev === 'UP' || prev === '')) {
+            info = '开多';
+            prev = 'DOWN';
+          }
+
+          if (!!info) {
+            subscriber.next(info);
+          }
+        },
+        error(err) {
+          // We need to make sure we're propagating our errors through.
+          subscriber.error(err);
+        },
+        complete() {
+          subscriber.complete();
+        },
+      });
+
+      return () => {
+        subscription.unsubscribe();
+        // Clean up all state.
+      };
+    });
+};
+
