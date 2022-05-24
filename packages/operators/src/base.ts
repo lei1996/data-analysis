@@ -202,11 +202,12 @@ export const makeSuObservable = (interval: number) => {
 
         const main$ = observable.pipe(share());
 
-        const mainSubscription = main$.subscribe({
+        const Subscription1 = main$.subscribe({
           next(item) {
-            const { close } = item;
+            const { high, low, close, volume } = item;
 
-            macdIndicator.update(close);
+            volumeIndicator.update(volume);
+            adxIndicator.update({ high, low, close });
           },
           error(err) {
             // We need to make sure we're propagating our errors through.
@@ -217,12 +218,11 @@ export const makeSuObservable = (interval: number) => {
           },
         });
 
-        const Subscription1 = main$.subscribe({
+        const mainSubscription = main$.subscribe({
           next(item) {
-            const { high, low, close, volume } = item;
+            const { close } = item;
 
-            volumeIndicator.update(volume);
-            adxIndicator.update({ high, low, close });
+            macdIndicator.update(close);
           },
           error(err) {
             // We need to make sure we're propagating our errors through.
