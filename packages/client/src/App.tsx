@@ -130,7 +130,7 @@ function App() {
               }
             />
           </div>
-          <button onClick={() => store.fetchChinaStockKLines()}>submit</button>
+          <button>submit</button>
         </div>
         <div>
           {store.chinaMList.map((iter, i) => {

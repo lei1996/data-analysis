@@ -45,7 +45,7 @@ export const makeSuObservable = (interval: number) => {
           },
         });
 
-        const mainSubscription = main$
+        const share$ = main$
           .pipe(
             concatMap((item) => {
               const { close } = item;
@@ -58,9 +58,18 @@ export const makeSuObservable = (interval: number) => {
               }
               return of();
             }),
+            share()
+          );
+
+        const buySubscription = share$
+          .pipe(
+            concatMap((x) => of({result: x, best: [10, 0]})),
+            buyOperator(),
           )
           .subscribe({
-            next(item) {},
+            next(item) {
+              console.log('多头', item);
+            },
             error(err) {
               // We need to make sure we're propagating our errors through.
               subscriber.error(err);
@@ -72,7 +81,7 @@ export const makeSuObservable = (interval: number) => {
 
         return () => {
           console.log('makeSuObservable 清空状态');
-          mainSubscription.unsubscribe();
+          buySubscription.unsubscribe();
           Subscription1.unsubscribe();
           // Clean up all state.
           macdIndicator = null!;

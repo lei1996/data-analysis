@@ -56,7 +56,7 @@ import {
   KLineBaseInterface,
 } from '@data-analysis/types/kline.type';
 import { autoRsiExTestOperator } from '@data-analysis/operators/src/rsi';
-import { autoMacdExTestOperator } from '@data-analysis/operators';
+import { makeSuObservable } from '@data-analysis/operators';
 
 // 这里是面向 用户 的 store
 class Store {
@@ -104,64 +104,6 @@ class Store {
     this.test();
     // this.autoBestTest();
     makeAutoObservable(this);
-  }
-
-  fetchChinaStockKLines() {
-    fetchChinaStockKLines({
-      symbol: this.chinaSymbol,
-      interval: this.chinaStock[this.chinaStockIndex],
-      limit: this.chinaKLineLength,
-    })
-      .pipe(
-        concatMap((x: any[]) =>
-          from(x).pipe(
-            concatMap(({ day, ...rest }) =>
-              of({
-                ...rest,
-                day,
-                id: new Date(day).getTime(),
-              }).pipe(delay(20)),
-            ),
-            makeMacdObservable(this.chinaMacdParams),
-            autoMacdExTestOperator('Macd'),
-            filter((x: ResultInterface) => x.key.includes('Sell')),
-            groupBy((x: ResultInterface) => x.key),
-            mergeMap((group$) =>
-              group$.pipe(
-                reduce((acc, cur) => [...acc, cur], [] as ResultInterface[]),
-              ),
-            ),
-            // makeRsiObservable(14),
-            // autoRsiExTestOperator(300, 'Rsi'),
-          ),
-        ),
-        tap((x) => {
-          console.log(x, '股票数据获取');
-
-          runInAction(() => {
-            this.chinaMList = x;
-          });
-        }),
-        filter((x) => Array.isArray(x)),
-        concatMap((x) => {
-          const result = [];
-          for (let i = 0; i < x.length; i += 2) {
-            result.push(new Big(x[i]._price).minus(x[i + 1]._price).toString());
-          }
-
-          return from(result);
-        }),
-        scan((curr, next) => curr.plus(next), new Big(0)),
-        defaultIfEmpty(new Big(0)),
-        last(),
-      )
-      .subscribe((x) => {
-        console.log(x.toString(), '结束');
-
-        runInAction(() => {
-          this.chinaSum = x.toString();
-        });
-      });
   }
 
   changeCryptoSource() {
@@ -339,50 +281,50 @@ class Store {
                 share(),
               );
               const macdShare$ = share$.pipe(
-                makeMacdExObservable(14, macdParam),
+                makeSuObservable(14),
                 share(),
               );
-              const momShare$ = share$.pipe(makeMomExObservable(14), share());
-              const rsiShare$ = share$.pipe(makeRsiObservable(14), share());
+              // const momShare$ = share$.pipe(makeMomExObservable(14), share());
+              // const rsiShare$ = share$.pipe(makeRsiObservable(14), share());
 
               return zip(
-                momShare$.pipe(autoRsiExTestOperator(300, 'Mom'), commonPipe()),
-                rsiShare$.pipe(autoRsiExTestOperator(300, 'Rsi'), commonPipe()),
+                macdShare$,
+                // rsiShare$.pipe(autoRsiExTestOperator(300, 'Rsi'), commonPipe()),
               );
             }),
-            this.computeResultPipe(symbol),
+            // this.computeResultPipe(symbol),
           );
         }),
-        toArray(),
-        tap((arrs) => {
-          from(arrs)
-            .pipe(
-              concatMap((arr: any) => {
-                const { symbol, profit } = arr;
+        // toArray(),
+        // tap((arrs) => {
+        //   from(arrs)
+        //     .pipe(
+        //       concatMap((arr: any) => {
+        //         const { symbol, profit } = arr;
 
-                return zip(
-                  [symbol],
-                  from(Object.keys(profit)).pipe(
-                    concatMap((key) =>
-                      from(profit[key] as string[]).pipe(
-                        defaultIfEmpty('0'),
-                        last(),
-                      ),
-                    ),
-                    scan((curr, next: string) => curr.plus(next), new Big(0)),
-                    defaultIfEmpty(new Big(0)),
-                    last(),
-                  ),
-                );
-              }),
-            )
-            .subscribe(([symbol, sum]) => {
-              console.log(symbol, '总值：', sum.toString());
-            });
-        }),
+        //         return zip(
+        //           [symbol],
+        //           from(Object.keys(profit)).pipe(
+        //             concatMap((key) =>
+        //               from(profit[key] as string[]).pipe(
+        //                 defaultIfEmpty('0'),
+        //                 last(),
+        //               ),
+        //             ),
+        //             scan((curr, next: string) => curr.plus(next), new Big(0)),
+        //             defaultIfEmpty(new Big(0)),
+        //             last(),
+        //           ),
+        //         );
+        //       }),
+        //     )
+        //     .subscribe(([symbol, sum]) => {
+        //       console.log(symbol, '总值：', sum.toString());
+        //     });
+        // }),
       )
       .subscribe((x: any) => {
-        this.profitLists = x;
+        // this.profitLists = x;
         console.log(x, cryptoSource);
       });
   }

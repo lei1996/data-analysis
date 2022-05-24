@@ -21,7 +21,7 @@ module.exports = merge(common, {
       // 接口请求代理
       '/api': {
         // target: 'http://localhost:7777',
-        target: 'https://vsweb.linairx.top/api',
+        target: 'https://suweb.linairx.top/api',
         secure: false,
         changeOrigin: true,
         pathRewrite: { '^/api': '' },
