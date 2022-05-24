@@ -83,6 +83,7 @@ export const makeSuObservable = (interval: number) => {
     );
 };
 
+// 做多 - 操作符
 export const buyOperator = () => {
   return (observable: Observable<OperatorInterface>) =>
     new Observable<string>((subscriber: Subscriber<string>) => {
@@ -123,3 +124,43 @@ export const buyOperator = () => {
     });
 };
 
+// 做空 - 操作符
+export const sellOperator = () => {
+  return (observable: Observable<OperatorInterface>) =>
+    new Observable<string>((subscriber: Subscriber<string>) => {
+      let prev: Prev = '';
+
+      const subscription = observable.subscribe({
+        next({ result, best }) {
+          let info: string = '';
+
+          const [upper, lower] = best;
+          const hist = new Big(result);
+
+          if (hist.gt(upper) && (prev === 'DOWN' || prev === '')) {
+            info = '开空';
+            prev = 'UP';
+          } else if (hist.lt(lower) && (prev === 'UP' || prev === '')) {
+            info = '平多';
+            prev = 'DOWN';
+          }
+
+          if (!!info) {
+            subscriber.next(info);
+          }
+        },
+        error(err) {
+          // We need to make sure we're propagating our errors through.
+          subscriber.error(err);
+        },
+        complete() {
+          subscriber.complete();
+        },
+      });
+
+      return () => {
+        subscription.unsubscribe();
+        // Clean up all state.
+      };
+    });
+};
