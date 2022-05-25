@@ -9,10 +9,27 @@ import {
   concatMap,
   of,
   Big,
+  from,
+  zip,
+  defaultIfEmpty,
+  last,
+  max,
+  BigSource,
 } from '@data-analysis/core';
 import { KLineBaseInterface } from '@data-analysis/types/kline.type';
 import { Prev } from './base';
+import { equalizerRxOperator, orderHubRxOperator } from './core';
+import { EqualizerRxInterface } from './types/equalizer.Rx';
 import { OperatorInterface } from './types/macd';
+
+type OperatorType = typeof buyOperator | typeof sellOperator;
+
+// 查找最优解 入参
+interface AutoBestInterface {
+  bests: number[][]; // 上界 和 下界  -> [10, -5]
+  maxminArrs: BigSource[]; // macd 指标缓存
+  klines: KLineBaseInterface[]; // kLine 缓存
+}
 
 export const makeSuObservable = (interval: number) => {
   return (observable: Observable<KLineBaseInterface>) =>
@@ -88,6 +105,71 @@ export const makeSuObservable = (interval: number) => {
         adxIndicator = null!;
       };
     });
+};
+
+// 查找最优解
+const autoBestOperator = (operator: OperatorType, interval: number) => {
+  return (observable: Observable<AutoBestInterface>) =>
+    new Observable<[EqualizerRxInterface, number[]]>(
+      (subscriber: Subscriber<[EqualizerRxInterface, number[]]>) => {
+        const subscription = observable
+          .pipe(
+            concatMap(({ bests, maxminArrs, klines }) => {
+              return from(bests).pipe(
+                concatMap((best) => {
+                  let kline: any = {};
+                  const last$ = zip(from(klines), from(maxminArrs)).pipe(
+                    concatMap(([item, result]) => {
+                      kline = item;
+                      return of({ result, best });
+                    }),
+                    operator(),
+                    concatMap((info) =>
+                      of({
+                        info,
+                        _price: kline.close,
+                        symbol: kline.symbol,
+                      }),
+                    ),
+                    orderHubRxOperator(interval),
+                    equalizerRxOperator(interval),
+                    defaultIfEmpty({
+                      beforeSum: new Big(0),
+                      aftersum: new Big(0),
+                      isLock: true,
+                    } as EqualizerRxInterface),
+                    last(),
+                  );
+
+                  return zip(last$, of(best));
+                }),
+                // 最好的策略
+                max<[EqualizerRxInterface, number[]]>((a, b) =>
+                  new Big(a[0].aftersum).lt(b[0].aftersum) ? -1 : 1,
+                ),
+              );
+            }),
+          )
+          .subscribe({
+            next(item) {
+              // console.log(item, 'auto 处理好的数据 - ');
+              subscriber.next(item);
+            },
+            error(err) {
+              // We need to make sure we're propagating our errors through.
+              subscriber.error(err);
+            },
+            complete() {
+              subscriber.complete();
+            },
+          });
+
+        return () => {
+          subscription.unsubscribe();
+          console.log('autoRsiExOperator 清空状态');
+        };
+      },
+    );
 };
 
 // 做多 - 操作符
