@@ -15,7 +15,10 @@ import {
   last,
   max,
   BigSource,
+  bufferCount,
+  map,
 } from '@data-analysis/core';
+import { divideEquallyRx } from '@data-analysis/core/src/divideEqually';
 import { KLineBaseInterface } from '@data-analysis/types/kline.type';
 import { Prev } from './base';
 import { equalizerRxOperator, orderHubRxOperator } from './core';
@@ -34,6 +37,7 @@ interface AutoBestInterface {
 export const makeSuObservable = (interval: number) => {
   return (observable: Observable<KLineBaseInterface>) =>
     new Observable<string>((subscriber: Subscriber<string>) => {
+      let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
       let macdIndicator = new MACD({
         indicator: EMA,
         shortInterval: 6,
@@ -64,6 +68,7 @@ export const makeSuObservable = (interval: number) => {
       const share$ = main$.pipe(
         concatMap((item) => {
           const { close } = item;
+          currKLine = item;
 
           macdIndicator.update(close);
 
@@ -72,6 +77,46 @@ export const makeSuObservable = (interval: number) => {
             return of(histogram);
           }
           return of();
+        }),
+        share(),
+      );
+
+      const autoBestShare$ = share$.pipe(
+        bufferCount(150, 1), // 每间隔 1/3 k线发射一次值 第一次发射必须要填满 maxLength 根k线
+        map((x) =>
+          x.reduce(
+            (curr, next) => ({
+              klines: [...curr.klines, currKLine as KLineBaseInterface],
+              maxminArrs: [...curr.maxminArrs, next],
+              maxVal: new Big(curr.maxVal).gt(next) ? curr.maxVal : next,
+              minVal: new Big(curr.minVal).lt(next) ? curr.minVal : next,
+            }),
+            {
+              klines: [] as KLineBaseInterface[],
+              maxminArrs: [] as BigSource[],
+              maxVal: new Big(-9999999) as BigSource,
+              minVal: new Big(9999999) as BigSource,
+            },
+          ),
+        ),
+        concatMap(({ klines, maxminArrs, maxVal, minVal }) => {
+          return divideEquallyRx(minVal, maxVal, 10).pipe(
+            concatMap((nums) => {
+              const result = {
+                bests: [] as number[][],
+                maxminArrs,
+                klines,
+              };
+
+              for (let i = 0; i < nums.length - 1; i++) {
+                for (let j = i + 1; j < nums.length; j++) {
+                  result.bests.push([nums[i], nums[j]]);
+                }
+              }
+
+              return of(result);
+            }),
+          );
         }),
         share(),
       );
@@ -103,6 +148,7 @@ export const makeSuObservable = (interval: number) => {
         macdIndicator = null!;
         volumeIndicator = null!;
         adxIndicator = null!;
+        currKLine = null!;
       };
     });
 };
