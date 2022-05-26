@@ -96,7 +96,7 @@ class Store {
   profitLists: ProfitObjectInterface[] = [];
   isRandom: boolean = true;
   maxOpenLimit: number = 1;
-  symbolLength: number = 400;
+  symbolLength: number = 600;
 
   constructor() {
     // this.fetchExchangeInfoData();

@@ -35,7 +35,7 @@ interface AutoBestInterface {
   klines: KLineBaseInterface[]; // kLine 缓存
 }
 
-export const makeSuObservable = (interval: number) => {
+export const makeSuObservable = (interval: number, maxLength: number = 300) => {
   return (observable: Observable<KLineBaseInterface>) =>
     new Observable<string>((subscriber: Subscriber<string>) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
@@ -48,6 +48,12 @@ export const makeSuObservable = (interval: number) => {
       });
       let volumeIndicator = new RSI(interval); // 量的 RSI 值
       let adxIndicator = new ADX(interval); // 当前趋势 值
+      let count: number = 0; // 推入的 k线数量
+
+      // 判断是否超过了初始化的参数
+      const isComplete = (): boolean => {
+        return count > maxLength;
+      };
 
       const main$ = observable.pipe(share());
 
@@ -71,6 +77,7 @@ export const makeSuObservable = (interval: number) => {
         concatMap((item) => {
           const { close } = item;
           currKLine = item;
+          count++;
 
           macdIndicator.update(close);
 
@@ -91,8 +98,17 @@ export const makeSuObservable = (interval: number) => {
         )
         .subscribe({
           next(item) {
-            console.log('多头', item);
-            subscriber.next(item);
+            if (isComplete() || item.includes('平')) {
+              if (!buy.isOpen && item.includes('开')) {
+                buy.isOpen = true;
+                console.log('多头', item);
+                subscriber.next(item);
+              } else if (buy.isOpen && item.includes('平')) {
+                buy.isOpen = false;
+                console.log('多头', item);
+                subscriber.next(item);
+              }
+            }
           },
           error(err) {
             // We need to make sure we're propagating our errors through.
@@ -107,7 +123,7 @@ export const makeSuObservable = (interval: number) => {
         concatMap((x) =>
           of({ result: x, item: currKLine as KLineBaseInterface }),
         ),
-        bufferCount(150, 1), // 每间隔 1/3 k线发射一次值 第一次发射必须要填满 maxLength 根k线
+        bufferCount(maxLength, 1), // 每间隔 1/3 k线发射一次值 第一次发射必须要填满 maxLength 根k线
         map((x) =>
           x.reduce(
             (curr, { result, item }) => ({
@@ -149,15 +165,15 @@ export const makeSuObservable = (interval: number) => {
       const buyAutoBestSubscription = autoBestShare$
         .pipe(autoBestOperator(buyOperator, 3))
         .subscribe(([equalizerResult, best]) => {
-          console.log(
-            currKLine,
-            new Big(equalizerResult.beforeSum).round(8).toString(),
-            new Big(equalizerResult.aftersum).round(8).toString(),
-            buy.best,
-            best,
-            // getNowTime(new Date().getTime()),
-            `开多 auto Best`,
-          );
+          // console.log(
+          //   currKLine,
+          //   new Big(equalizerResult.beforeSum).round(8).toString(),
+          //   new Big(equalizerResult.aftersum).round(8).toString(),
+          //   buy.best,
+          //   best,
+          //   // getNowTime(new Date().getTime()),
+          //   `开多 auto Best`,
+          // );
           buy.best = best;
           // buy.isLock = equalizerResult.isLock;
         });
@@ -214,7 +230,7 @@ const autoBestOperator = (operator: OperatorType, interval: number) => {
                 }),
                 // 最好的策略
                 max<[EqualizerRxInterface, number[]]>((a, b) =>
-                  new Big(a[0].beforeSum).lt(b[0].beforeSum) ? -1 : 1,
+                  new Big(a[0].aftersum).lt(b[0].aftersum) ? -1 : 1,
                 ),
               );
             }),
