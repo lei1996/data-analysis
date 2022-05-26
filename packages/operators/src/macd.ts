@@ -17,10 +17,11 @@ import {
   BigSource,
   bufferCount,
   map,
+  tap,
 } from '@data-analysis/core';
 import { divideEquallyRx } from '@data-analysis/core/src/divideEqually';
 import { KLineBaseInterface } from '@data-analysis/types/kline.type';
-import { Prev } from './base';
+import { Business, Prev } from './base';
 import { equalizerRxOperator, orderHubRxOperator } from './core';
 import { EqualizerRxInterface } from './types/equalizer.Rx';
 import { OperatorInterface } from './types/macd';
@@ -38,6 +39,7 @@ export const makeSuObservable = (interval: number) => {
   return (observable: Observable<KLineBaseInterface>) =>
     new Observable<string>((subscriber: Subscriber<string>) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
+      let buy = new Business();
       let macdIndicator = new MACD({
         indicator: EMA,
         shortInterval: 6,
@@ -81,15 +83,38 @@ export const makeSuObservable = (interval: number) => {
         share(),
       );
 
+      const buySubscription = share$
+        .pipe(
+          concatMap((x) => of({ result: x, best: buy.best })),
+          // tap(({best}) => console.log(best, '查看best')),
+          buyOperator(),
+        )
+        .subscribe({
+          next(item) {
+            console.log('多头', item);
+            subscriber.next(item);
+          },
+          error(err) {
+            // We need to make sure we're propagating our errors through.
+            subscriber.error(err);
+          },
+          complete() {
+            subscriber.complete();
+          },
+        });
+
       const autoBestShare$ = share$.pipe(
+        concatMap((x) =>
+          of({ result: x, item: currKLine as KLineBaseInterface }),
+        ),
         bufferCount(150, 1), // 每间隔 1/3 k线发射一次值 第一次发射必须要填满 maxLength 根k线
         map((x) =>
           x.reduce(
-            (curr, next) => ({
-              klines: [...curr.klines, currKLine as KLineBaseInterface],
-              maxminArrs: [...curr.maxminArrs, next],
-              maxVal: new Big(curr.maxVal).gt(next) ? curr.maxVal : next,
-              minVal: new Big(curr.minVal).lt(next) ? curr.minVal : next,
+            (curr, { result, item }) => ({
+              klines: [...curr.klines, item],
+              maxminArrs: [...curr.maxminArrs, result],
+              maxVal: new Big(curr.maxVal).gt(result) ? curr.maxVal : result,
+              minVal: new Big(curr.minVal).lt(result) ? curr.minVal : result,
             }),
             {
               klines: [] as KLineBaseInterface[],
@@ -121,29 +146,27 @@ export const makeSuObservable = (interval: number) => {
         share(),
       );
 
-      const buySubscription = share$
-        .pipe(
-          concatMap((x) => of({ result: x, best: [10, 0] })),
-          buyOperator(),
-        )
-        .subscribe({
-          next(item) {
-            console.log('多头', item);
-            subscriber.next(item);
-          },
-          error(err) {
-            // We need to make sure we're propagating our errors through.
-            subscriber.error(err);
-          },
-          complete() {
-            subscriber.complete();
-          },
+      const buyAutoBestSubscription = autoBestShare$
+        .pipe(autoBestOperator(buyOperator, 3))
+        .subscribe(([equalizerResult, best]) => {
+          console.log(
+            currKLine,
+            new Big(equalizerResult.beforeSum).round(8).toString(),
+            new Big(equalizerResult.aftersum).round(8).toString(),
+            buy.best,
+            best,
+            // getNowTime(new Date().getTime()),
+            `开多 auto Best`,
+          );
+          buy.best = best;
+          // buy.isLock = equalizerResult.isLock;
         });
 
       return () => {
         console.log('makeSuObservable 清空状态');
         buySubscription.unsubscribe();
         Subscription1.unsubscribe();
+        buyAutoBestSubscription.unsubscribe();
         // Clean up all state.
         macdIndicator = null!;
         volumeIndicator = null!;
@@ -191,7 +214,7 @@ const autoBestOperator = (operator: OperatorType, interval: number) => {
                 }),
                 // 最好的策略
                 max<[EqualizerRxInterface, number[]]>((a, b) =>
-                  new Big(a[0].aftersum).lt(b[0].aftersum) ? -1 : 1,
+                  new Big(a[0].beforeSum).lt(b[0].beforeSum) ? -1 : 1,
                 ),
               );
             }),
