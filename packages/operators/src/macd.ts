@@ -18,6 +18,8 @@ import {
   bufferCount,
   map,
   tap,
+  filter,
+  delay,
 } from '@data-analysis/core';
 import { divideEquallyRx } from '@data-analysis/core/src/divideEqually';
 import { KLineBaseInterface } from '@data-analysis/types/kline.type';
@@ -95,19 +97,18 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
           concatMap((x) => of({ result: x, best: buy.best })),
           // tap(({best}) => console.log(best, '查看best')),
           buyOperator(),
+          filter(() => isComplete() && adxIndicator.getResult().lt(99)),
         )
         .subscribe({
           next(item) {
-            if (isComplete() || item.includes('平')) {
-              if (!buy.isOpen && item.includes('开')) {
-                buy.isOpen = true;
-                console.log('多头', item);
-                subscriber.next(item);
-              } else if (buy.isOpen && item.includes('平')) {
-                buy.isOpen = false;
-                console.log('多头', item);
-                subscriber.next(item);
-              }
+            if (!buy.isOpen && item.includes('开')) {
+              buy.isOpen = true;
+              console.log('多头', item);
+              subscriber.next(item);
+            } else if (buy.isOpen && item.includes('平')) {
+              buy.isOpen = false;
+              console.log('多头', item);
+              subscriber.next(item);
             }
           },
           error(err) {
@@ -264,43 +265,49 @@ export const buyOperator = () => {
       let prev: Prev = '';
       let isOpen: boolean = false;
 
-      const subscription = observable.subscribe({
-        next({ result, best }) {
-          let info: string = '';
+      const subscription = observable
+        // .pipe(
+        //   tap(() => console.log(prev, isOpen)),
+        //   delay(20),
+        // )
+        .subscribe({
+          next({ result, best }) {
+            let info: string = '';
 
-          const [upper, lower] = best;
-          const hist = new Big(result);
+            const [upper, lower] = best;
+            const hist = new Big(result);
 
-          if (hist.gt(upper) && isOpen && (prev === 'DOWN' || prev === '')) {
-            info = '平空';
-            prev = 'UP';
-            isOpen = false;
-          } else if (
-            hist.lt(lower) &&
-            !isOpen &&
-            (prev === 'UP' || prev === '')
-          ) {
-            info = '开多';
-            prev = 'DOWN';
-            isOpen = true;
-          }
+            if (hist.gt(upper) && isOpen && (prev === 'DOWN' || prev === '')) {
+              info = '平空';
+              prev = 'UP';
+              isOpen = false;
+            } else if (
+              hist.lt(lower) &&
+              !isOpen &&
+              (prev === 'UP' || prev === '')
+            ) {
+              info = '开多';
+              prev = 'DOWN';
+              isOpen = true;
+            }
 
-          if (!!info) {
-            subscriber.next(info);
-          }
-        },
-        error(err) {
-          // We need to make sure we're propagating our errors through.
-          subscriber.error(err);
-        },
-        complete() {
-          subscriber.complete();
-        },
-      });
+            if (!!info) {
+              subscriber.next(info);
+            }
+          },
+          error(err) {
+            // We need to make sure we're propagating our errors through.
+            subscriber.error(err);
+          },
+          complete() {
+            subscriber.complete();
+          },
+        });
 
       return () => {
         subscription.unsubscribe();
         // Clean up all state.
+        // console.log('做多清空状态');
       };
     });
 };
@@ -349,6 +356,7 @@ export const sellOperator = () => {
       return () => {
         subscription.unsubscribe();
         // Clean up all state.
+        // console.log('做空清空状态');
       };
     });
 };
