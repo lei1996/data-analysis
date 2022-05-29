@@ -1,6 +1,7 @@
 import React from 'react';
 import { observer } from 'mobx-react';
 
+import { WebSocketDemo } from './components/Websocket';
 import ProfitLineChart from './components/ProfitLineChart';
 import { ChinaLineChart } from './components/ChinaLineChart';
 import store from './store/store';
@@ -81,6 +82,9 @@ function App() {
   return (
     <div>
       <h1 className={styles.title}>App</h1>
+      <div>
+        <WebSocketDemo />
+      </div>
       <div>
         code:
         <input
