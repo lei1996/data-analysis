@@ -1,12 +1,7 @@
-import {
-  filter,
-  from,
-  share,
-  switchMapTo,
-  timer,
-} from '@data-analysis/core';
+import { filter, from, share, switchMapTo, timer } from '@data-analysis/core';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import useWebSocket, { ReadyState } from 'react-use-websocket';
+
 import { blobInflate } from '../utils/blobInflate';
 
 export const WebSocketDemo = () => {
@@ -43,7 +38,7 @@ export const WebSocketDemo = () => {
     if (lastMessage !== null) {
       const main$ = from(blobInflate(lastMessage.data)).pipe(share());
 
-    // 间隔 5s 发送
+      // 间隔 5s 发送
       const pingSubscription = main$
         .pipe(
           filter((item: any) => item.ping),
@@ -74,11 +69,6 @@ export const WebSocketDemo = () => {
       };
     }
   }, [lastMessage, setMessageHistory]);
-
-  //   const handleClickChangeSocketUrl = useCallback(
-  //     () => setSocketUrl('wss://api.hbdm.vn/linear-swap-ws'),
-  //     [],
-  //   );
 
   const handleClickSendMessage = useCallback(
     () =>
