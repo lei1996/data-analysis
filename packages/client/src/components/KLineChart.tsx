@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { init, dispose } from 'klinecharts';
+import React, { useEffect, useRef } from 'react';
+import { init, dispose, Chart } from 'klinecharts';
 
 const generatedDataList = [
   {
@@ -84,37 +84,27 @@ const generatedDataList = [
   },
 ];
 
+// applyNewData 初始化默认数据
+// applyMoreData 添加历史数据
+// updateData 更新最后一条数据 / 添加一条数据在末尾
+
 export function WhChart() {
+  const chartRef = useRef<Chart | null>(null);
+  
   useEffect(() => {
     // Init chart
-    const chart = init('simple_chart');
-    // Create main technical indicator MA
-    chart?.createTechnicalIndicator('MA', false, { id: 'candle_pane' });
-    // Create sub technical indicator VOL
-    chart?.createTechnicalIndicator('VOL');
-    // Fill data
-    chart?.applyNewData(generatedDataList);
-    chart?.applyNewData(generatedDataList);
-    chart?.applyMoreData([
-      {
-        close: 4915.09,
-        high: 4988.62,
-        low: 4900.3,
-        open: 4986.72,
-        timestamp: 1597660540000,
-        volume: 176,
-      },
-    ]);
-    chart?.updateData({
-      close: 4915.09,
-      high: 4988.62,
-      low: 4900.3,
-      open: 4986.72,
-      timestamp: 1597660540000,
-      volume: 176,
-    });
+    chartRef.current = init('simple_chart');
 
-    console.log(chart?.getStyleOptions(), 'chart?.getStyleOptions() ->');
+    if (chartRef.current) {
+      // Create main technical indicator MA
+      chartRef.current.createTechnicalIndicator('MA', false, { id: 'candle_pane' });
+      // Create sub technical indicator VOL
+      chartRef.current.createTechnicalIndicator('VOL');
+      // Fill data
+      chartRef.current.applyNewData(generatedDataList);
+  
+      console.log(chartRef.current.getStyleOptions(), chartRef.current, 'chart?.getStyleOptions() ->');
+    }
 
     return () => {
       dispose('simple_chart');

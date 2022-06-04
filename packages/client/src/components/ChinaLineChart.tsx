@@ -2,19 +2,14 @@ import React from 'react';
 import {
   AreaChart,
   Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   Tooltip,
 } from 'recharts';
 
 import { css } from 'linaria';
 
-const mt = (x: number) => {
-  return `
+const mt = (x: number) => `
     margin-top: ${x}px;
   `;
-};
 
 const styles = {
   title: css`
@@ -22,7 +17,7 @@ const styles = {
   `,
   container: css`
     margin-bottom: 15px;
-    ${mt(15)}
+    ${mt(33)}
   `,
 };
 
