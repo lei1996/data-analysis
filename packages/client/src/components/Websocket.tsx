@@ -11,9 +11,8 @@ export const WebSocketDemo = () => {
   const [socketUrl, setSocketUrl] = useState(
     'wss://api.hbdm.vn/linear-swap-ws',
   );
-  const [messageHistory, setMessageHistory] = useState([]);
 
-  const { sendMessage, lastMessage, readyState, getWebSocket } = useWebSocket(
+  const { sendMessage, lastMessage, readyState } = useWebSocket(
     socketUrl,
     {
       shouldReconnect: (closeEvent) => {
@@ -68,7 +67,7 @@ export const WebSocketDemo = () => {
         kLineSubscription.unsubscribe();
       };
     }
-  }, [lastMessage, setMessageHistory]);
+  }, [lastMessage]);
 
   const handleClickSendMessage = useCallback(
     () =>

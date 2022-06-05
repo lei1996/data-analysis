@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { observer } from 'mobx-react';
 
 import { WebSocketDemo } from './components/Websocket';
@@ -8,6 +8,7 @@ import store from './store/store';
 
 import { css } from 'linaria';
 import { WhChart } from './components/KLineChart';
+import { Chart } from 'klinecharts';
 
 const styles = {
   title: css`
@@ -71,6 +72,7 @@ const data = [
 ];
 
 function App() {
+  const chartRef = useRef<Chart | null>(null);
   const maxOpenLimitChangeHandle = (e: any) => {
     store.maxOpenLimit = e.target.value;
   };
@@ -152,7 +154,7 @@ function App() {
         <ChinaLineChart data={data} />
       </div>
       <div>
-        <WhChart />
+        <WhChart chartRef={chartRef} />
       </div>
       data Source:
       <select

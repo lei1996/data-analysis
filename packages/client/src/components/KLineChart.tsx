@@ -88,26 +88,29 @@ const generatedDataList = [
 // applyMoreData 添加历史数据
 // updateData 更新最后一条数据 / 添加一条数据在末尾
 
-export function WhChart() {
-  const chartRef = useRef<Chart | null>(null);
-  
+export function WhChart({
+  chartRef,
+}: {
+  chartRef: React.MutableRefObject<Chart | null>;
+}) {
   useEffect(() => {
     // Init chart
     chartRef.current = init('simple_chart');
 
     if (chartRef.current) {
       // Create main technical indicator MA
-      chartRef.current.createTechnicalIndicator('MA', false, { id: 'candle_pane' });
+      chartRef.current.createTechnicalIndicator('MA', false, {
+        id: 'candle_pane',
+      });
       // Create sub technical indicator VOL
       chartRef.current.createTechnicalIndicator('VOL');
       // Fill data
       chartRef.current.applyNewData(generatedDataList);
-  
-      console.log(chartRef.current.getStyleOptions(), chartRef.current, 'chart?.getStyleOptions() ->');
     }
 
     return () => {
       dispose('simple_chart');
+      chartRef.current = null;
     };
   }, []);
 
