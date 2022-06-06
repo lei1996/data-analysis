@@ -2,30 +2,37 @@ import { filter, from, share, switchMapTo, timer } from '@data-analysis/core';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import useWebSocket, { ReadyState } from 'react-use-websocket';
 
+import { css } from 'linaria';
+
 import { blobInflate } from '../utils/blobInflate';
+import { KLineChart } from './KLineChart';
+
+const styles = {
+  klineChartContainer: css`
+    height: 600px;
+  `,
+};
 
 export const WebSocketDemo = () => {
   const didUnmount = useRef(false);
+  const chartRef = useRef(null);
 
   //Public API that will echo messages sent to it back to the client
   const [socketUrl, setSocketUrl] = useState(
     'wss://api.hbdm.vn/linear-swap-ws',
   );
 
-  const { sendMessage, lastMessage, readyState } = useWebSocket(
-    socketUrl,
-    {
-      shouldReconnect: (closeEvent) => {
-        /*
+  const { sendMessage, lastMessage, readyState } = useWebSocket(socketUrl, {
+    shouldReconnect: (closeEvent) => {
+      /*
       useWebSocket will handle unmounting for you, but this is an example of a 
       case in which you would not want it to automatically reconnect
     */
-        return didUnmount.current === false;
-      },
-      reconnectAttempts: 10,
-      reconnectInterval: 3000,
+      return didUnmount.current === false;
     },
-  );
+    reconnectAttempts: 10,
+    reconnectInterval: 3000,
+  });
 
   useEffect(() => {
     return () => {
@@ -99,6 +106,9 @@ export const WebSocketDemo = () => {
         Click Me to send 'Hello'
       </button>
       <span>The WebSocket is currently {connectionStatus}</span>
+      <div className={styles.klineChartContainer}>
+        <KLineChart chartRef={chartRef} />
+      </div>
     </div>
   );
 };

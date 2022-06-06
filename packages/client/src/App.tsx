@@ -7,7 +7,6 @@ import { ChinaLineChart } from './components/ChinaLineChart';
 import store from './store/store';
 
 import { css } from 'linaria';
-import { WhChart } from './components/KLineChart';
 import { Chart } from 'klinecharts';
 
 const styles = {
@@ -152,9 +151,6 @@ function App() {
           <div>{store.chinaSum}</div>
         </div>
         <ChinaLineChart data={data} />
-      </div>
-      <div>
-        <WhChart chartRef={chartRef} />
       </div>
       data Source:
       <select

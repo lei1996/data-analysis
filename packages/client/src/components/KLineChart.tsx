@@ -1,5 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect } from 'react';
 import { init, dispose, Chart } from 'klinecharts';
+
+import { css } from 'linaria';
 
 const generatedDataList = [
   {
@@ -84,11 +86,18 @@ const generatedDataList = [
   },
 ];
 
+const styles = {
+  fill: css`
+    width: 100%;
+    height: 100%;
+  `,
+};
+
 // applyNewData 初始化默认数据
 // applyMoreData 添加历史数据
 // updateData 更新最后一条数据 / 添加一条数据在末尾
 
-export function WhChart({
+export function KLineChart({
   chartRef,
 }: {
   chartRef: React.MutableRefObject<Chart | null>;
@@ -104,8 +113,13 @@ export function WhChart({
       });
       // Create sub technical indicator VOL
       chartRef.current.createTechnicalIndicator('VOL');
+
       // Fill data
       chartRef.current.applyNewData(generatedDataList);
+
+      chartRef.current.loadMore((timestamp) => {
+        console.log(timestamp, '时间戳');
+      });
     }
 
     return () => {
@@ -114,5 +128,5 @@ export function WhChart({
     };
   }, []);
 
-  return <div id="simple_chart" style={{ height: 600 }} />;
+  return <div id="simple_chart" className={styles.fill} />;
 }
