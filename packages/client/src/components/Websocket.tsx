@@ -1,4 +1,11 @@
-import { filter, from, share, switchMapTo, timer } from '@data-analysis/core';
+import {
+  filter,
+  from,
+  map,
+  share,
+  switchMapTo,
+  timer,
+} from '@data-analysis/core';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import useWebSocket, { ReadyState } from 'react-use-websocket';
 
@@ -6,6 +13,7 @@ import { css } from 'linaria';
 
 import { blobInflate } from '../utils/blobInflate';
 import { KLineChart } from './KLineChart';
+import { Chart } from 'klinecharts';
 
 const styles = {
   klineChartContainer: css`
@@ -15,7 +23,7 @@ const styles = {
 
 export const WebSocketDemo = () => {
   const didUnmount = useRef(false);
-  const chartRef = useRef(null);
+  const chartRef = useRef<Chart | null>(null);
 
   //Public API that will echo messages sent to it back to the client
   const [socketUrl, setSocketUrl] = useState(
@@ -63,9 +71,24 @@ export const WebSocketDemo = () => {
           filter(
             (item: any) => !!item.ch && (item.ch as string).includes('kline'),
           ),
+          map(({ tick: { close, high, id, low, open, vol } }) => ({
+            close,
+            high,
+            id: id * 1000,
+            low,
+            open,
+            volume: vol,
+          })),
         )
-        .subscribe((x) => {
-          console.log(x, 'k线数据 -');
+        .subscribe(({ id, ...rest }) => {
+          console.log(id, rest, 'k线数据 -');
+          if (chartRef.current) {
+            // websocket 数据
+            chartRef.current.updateData({
+              timestamp: id,
+              ...rest,
+            });
+          }
         });
 
       return () => {
