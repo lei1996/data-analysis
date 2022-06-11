@@ -34,7 +34,13 @@ class KLineStore {
     if (!this.has(symbol)) return;
 
     const klines = this.getKLineValue(symbol);
-    klines.push(kline);
+
+    // 如果是最后一个k线，则更新它
+    if (klines[klines.length - 1].id === kline.id) {
+      klines[klines.length - 1] = kline;
+    } else {
+      klines.push(kline);
+    }
 
     this._map.set(symbol, klines);
   }

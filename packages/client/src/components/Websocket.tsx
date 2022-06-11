@@ -11,17 +11,19 @@ import {
   toArray,
 } from '@data-analysis/core';
 import React, { useCallback, useEffect, useRef } from 'react';
+import { Chart } from 'klinecharts';
+import { observer } from 'mobx-react';
 import useWebSocket, { ReadyState } from 'react-use-websocket';
 
 import { css } from 'linaria';
 
+import { timeHuobi } from '@data-analysis/utils';
+
 import { blobInflate } from '../utils/blobInflate';
 import { KLineChart } from './KLineChart';
-import { Chart } from 'klinecharts';
 
 import huobiStore from '../store/huobiStore';
-import { observer } from 'mobx-react';
-import { timeHuobi } from '@data-analysis/utils';
+import kLineStore from '../store/kLineStore';
 
 const styles = {
   klineChartContainer: css`
@@ -96,6 +98,9 @@ function WebSocketDemo() {
 
     main$.pipe(toArray()).subscribe((x) => {
       console.log(x, '处理过的k线数据');
+      const { symbol } = huobiStore.currTard;
+
+      kLineStore.addItem(symbol, x);
     });
 
     if (chartRef.current) {
@@ -119,7 +124,7 @@ function WebSocketDemo() {
           .pipe(
             concatMap((x) =>
               from(x).pipe(
-                filter(({id}: any) => id * 1000 !== timestamp),
+                filter(({ id }: any) => id * 1000 !== timestamp),
                 map(({ close, high, id, low, open, vol }: any) => ({
                   close,
                   high,
@@ -148,7 +153,14 @@ function WebSocketDemo() {
             }
           });
 
-        main$.pipe(toArray()).subscribe((x) => console.log(x, '历史k线数据'));
+        main$.pipe(toArray()).subscribe((x) => {
+          console.log(x, '历史k线数据');
+          const { symbol } = huobiStore.currTard;
+
+          const klines = kLineStore.getKLineValue(symbol);
+
+          kLineStore.addItem(symbol, [...x, ...klines]);
+        });
       });
     }
 
@@ -194,11 +206,15 @@ function WebSocketDemo() {
         .subscribe(({ id, ...rest }) => {
           console.log(id, rest, 'k线数据 -');
           if (chartRef.current) {
+            const { symbol } = huobiStore.currTard;
+
             // websocket 数据
             chartRef.current.updateData({
               timestamp: id,
               ...rest,
             });
+
+            kLineStore.update(symbol, { id, ...rest });
           }
         });
 
