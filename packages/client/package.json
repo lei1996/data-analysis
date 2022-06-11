@@ -16,7 +16,7 @@
     "axios": "^0.21.1",
     "echarts": "^5.1.2",
     "echarts-for-react": "^3.0.1",
-    "klinecharts": "^8.3.6",
+    "klinecharts": "^8.5.0",
     "lightweight-charts": "^3.8.0",
     "linaria": "^2.1.0",
     "mobx": "^6.3.2",

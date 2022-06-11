@@ -31,6 +31,48 @@ const styles = {
   `,
 };
 
+function annotationDrawExtend(ctx: any, coordinate: any, text: any) {
+  ctx.font = '12px Roboto';
+  ctx.fillStyle = '#2d6187';
+  ctx.strokeStyle = '#2d6187';
+
+  const textWidth = ctx.measureText(text).width;
+  const startX = coordinate.x;
+  let startY = coordinate.y + 6;
+  ctx.beginPath();
+  ctx.moveTo(startX, startY);
+  startY += 5;
+  ctx.lineTo(startX - 4, startY);
+  ctx.lineTo(startX + 4, startY);
+  ctx.closePath();
+  ctx.fill();
+
+  const rectX = startX - textWidth / 2 - 6;
+  const rectY = startY;
+  const rectWidth = textWidth + 12;
+  const rectHeight = 28;
+  const r = 2;
+  ctx.beginPath();
+  ctx.moveTo(rectX + r, rectY);
+  ctx.arcTo(rectX + rectWidth, rectY, rectX + rectWidth, rectY + rectHeight, r);
+  ctx.arcTo(
+    rectX + rectWidth,
+    rectY + rectHeight,
+    rectX,
+    rectY + rectHeight,
+    r,
+  );
+  ctx.arcTo(rectX, rectY + rectHeight, rectX, rectY, r);
+  ctx.arcTo(rectX, rectY, rectX + rectWidth, rectY, r);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#fff';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, startX, startY + 14);
+}
+
 function WebSocketDemo() {
   const didUnmount = useRef(false);
   const chartRef = useRef<Chart | null>(null);
@@ -93,6 +135,22 @@ function WebSocketDemo() {
         if (chartRef.current) {
           // 初始化 k线数据
           chartRef.current.applyNewData(x);
+
+          chartRef.current.createAnnotation([
+            {
+              point: {
+                timestamp: x[x.length - 5].timestamp,
+                value: x[x.length - 3].close,
+              },
+              styles: {
+                position: 'point',
+              },
+              drawExtend: (params) => {
+                const { ctx, coordinate } = params;
+                annotationDrawExtend(ctx, coordinate, '这是一个固定显示标记');
+              },
+            },
+          ]);
         }
       });
 

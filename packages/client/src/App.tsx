@@ -71,7 +71,6 @@ const data = [
 ];
 
 function App() {
-  const chartRef = useRef<Chart | null>(null);
   const maxOpenLimitChangeHandle = (e: any) => {
     store.maxOpenLimit = e.target.value;
   };
