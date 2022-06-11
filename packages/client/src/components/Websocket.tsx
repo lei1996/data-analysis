@@ -1,4 +1,5 @@
 import {
+  Big,
   concatMap,
   filter,
   from,
@@ -20,6 +21,7 @@ import { Chart } from 'klinecharts';
 
 import huobiStore from '../store/huobiStore';
 import { observer } from 'mobx-react';
+import { timeHuobi } from '@data-analysis/utils';
 
 const styles = {
   klineChartContainer: css`
@@ -96,7 +98,59 @@ function WebSocketDemo() {
       console.log(x, '处理过的k线数据');
     });
 
-    handleClickSendMessage();
+    if (chartRef.current) {
+      chartRef.current.loadMore((timestamp) => {
+        console.log(timestamp, '历史时间戳');
+        const { symbol, interval, limit = '' } = huobiStore.currTard;
+
+        const startTime = new Big(timestamp)
+          .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
+          .toString();
+
+        console.log(startTime, 'leftTimestamp 左侧时间戳');
+
+        const main$ = huobiStore
+          .fetchKLine({
+            symbol: symbol,
+            interval: interval,
+            startTime: (+startTime / 1000).toString(),
+            endTime: (timestamp / 1000).toString(),
+          })
+          .pipe(
+            concatMap((x) =>
+              from(x).pipe(
+                filter(({id}: any) => id * 1000 !== timestamp),
+                map(({ close, high, id, low, open, vol }: any) => ({
+                  close,
+                  high,
+                  id: id * 1000,
+                  low,
+                  open,
+                  volume: vol,
+                })),
+              ),
+            ),
+          );
+
+        main$
+          .pipe(
+            map(({ id, ...rest }) => ({
+              timestamp: id,
+              ...rest,
+            })),
+            toArray(),
+          )
+          .subscribe((x) => {
+            console.log(x, '图标需要的历史k线数据');
+            if (chartRef.current) {
+              // 初始化 k线数据
+              chartRef.current.applyMoreData(x);
+            }
+          });
+
+        main$.pipe(toArray()).subscribe((x) => console.log(x, '历史k线数据'));
+      });
+    }
 
     return () => {
       didUnmount.current = true;
@@ -156,15 +210,15 @@ function WebSocketDemo() {
     }
   }, [lastMessage]);
 
-  const handleClickSendMessage = useCallback(
-    () =>
-      sendMessage(
-        JSON.stringify({
-          sub: `market.${huobiStore.currTard.symbol}.kline.${huobiStore.currTard.interval}`,
-        }),
-      ),
-    [],
-  );
+  const handleClickSendMessage = useCallback(() => {
+    const { symbol, interval, limit } = huobiStore.currTard;
+
+    sendMessage(
+      JSON.stringify({
+        sub: `market.${symbol}.kline.${interval}`,
+      }),
+    );
+  }, []);
 
   const connectionStatus = {
     [ReadyState.CONNECTING]: 'Connecting',

@@ -20,7 +20,7 @@ export function huobiUserDataPipe() {
 interface KLineParamsInterface {
   symbol: string; // 交易对
   interval: string; // 时间间隔
-  limit: string; // k线长度
+  limit?: string; // k线长度
   startTime?: string; // 开始时间
   endTime?: string; // 结束时间
 }
