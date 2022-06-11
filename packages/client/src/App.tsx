@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { observer } from 'mobx-react';
 
-import { WebSocketDemo } from './components/Websocket';
+import WebSocketDemo from './components/Websocket';
 import ProfitLineChart from './components/ProfitLineChart';
 import { ChinaLineChart } from './components/ChinaLineChart';
 import store from './store/store';

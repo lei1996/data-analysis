@@ -11,7 +11,7 @@ interface KLineInterface {
 }
 
 class KLineStore {
-  private _kline: Map<string, KLineInterface[]> = new Map();
+  private _map: Map<string, KLineInterface[]> = new Map();
 
   constructor() {
     makeAutoObservable(this);
@@ -19,14 +19,14 @@ class KLineStore {
 
   // 新增一个交易对
   addItem(symbol: string, klines: KLineInterface[]) {
-    this._kline.set(symbol, klines);
+    this._map.set(symbol, klines);
   }
 
   // 移除某一个交易对
   remove(symbol: string) {
     if (!this.has(symbol)) return;
 
-    this._kline.delete(symbol);
+    this._map.delete(symbol);
   }
 
   // 修改某个交易对里面的所有k线
@@ -36,7 +36,7 @@ class KLineStore {
     const klines = this.getKLineValue(symbol);
     klines.push(kline);
 
-    this._kline.set(symbol, klines);
+    this._map.set(symbol, klines);
   }
 
   // 查找交易对里面的k线
@@ -47,7 +47,7 @@ class KLineStore {
   }
 
   has(symbol: string) {
-    return this._kline.has(symbol);
+    return this._map.has(symbol);
   }
 
   /**
@@ -56,7 +56,7 @@ class KLineStore {
    * @returns
    */
   getKLineValue(symbol: string) {
-    return this._kline.get(symbol) ?? [];
+    return this._map.get(symbol) ?? [];
   }
 }
 

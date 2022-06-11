@@ -1,12 +1,15 @@
 import {
+  concatMap,
   filter,
   from,
   map,
+  of,
   share,
   switchMapTo,
   timer,
+  toArray,
 } from '@data-analysis/core';
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import useWebSocket, { ReadyState } from 'react-use-websocket';
 
 import { css } from 'linaria';
@@ -15,34 +18,86 @@ import { blobInflate } from '../utils/blobInflate';
 import { KLineChart } from './KLineChart';
 import { Chart } from 'klinecharts';
 
+import huobiStore from '../store/huobiStore';
+import { observer } from 'mobx-react';
+
 const styles = {
   klineChartContainer: css`
     height: 600px;
   `,
 };
 
-export const WebSocketDemo = () => {
+function WebSocketDemo() {
   const didUnmount = useRef(false);
   const chartRef = useRef<Chart | null>(null);
 
-  //Public API that will echo messages sent to it back to the client
-  const [socketUrl, setSocketUrl] = useState(
-    'wss://api.hbdm.vn/linear-swap-ws',
-  );
-
-  const { sendMessage, lastMessage, readyState } = useWebSocket(socketUrl, {
-    shouldReconnect: (closeEvent) => {
-      /*
+  const { sendMessage, lastMessage, readyState } = useWebSocket(
+    huobiStore.socketUrl,
+    {
+      shouldReconnect: (closeEvent) => {
+        /*
       useWebSocket will handle unmounting for you, but this is an example of a 
       case in which you would not want it to automatically reconnect
     */
-      return didUnmount.current === false;
+        return didUnmount.current === false;
+      },
+      reconnectAttempts: 10,
+      reconnectInterval: 5 * 1000,
     },
-    reconnectAttempts: 10,
-    reconnectInterval: 3000,
-  });
+  );
 
   useEffect(() => {
+    if (readyState === ReadyState.OPEN) {
+      handleClickSendMessage();
+    }
+  }, [readyState]);
+
+  useEffect(() => {
+    const { symbol, interval, limit } = huobiStore.currTard;
+
+    const main$ = huobiStore
+      .fetchKLine({
+        symbol: symbol,
+        interval: interval,
+        limit: limit,
+      })
+      .pipe(
+        concatMap((x) =>
+          from(x).pipe(
+            map(({ close, high, id, low, open, vol }: any) => ({
+              close,
+              high,
+              id: id * 1000,
+              low,
+              open,
+              volume: vol,
+            })),
+          ),
+        ),
+      );
+
+    main$
+      .pipe(
+        map(({ id, ...rest }) => ({
+          timestamp: id,
+          ...rest,
+        })),
+        toArray(),
+      )
+      .subscribe((x) => {
+        console.log(x, '图标需要的k线数据');
+        if (chartRef.current) {
+          // 初始化 k线数据
+          chartRef.current.applyNewData(x);
+        }
+      });
+
+    main$.pipe(toArray()).subscribe((x) => {
+      console.log(x, '处理过的k线数据');
+    });
+
+    handleClickSendMessage();
+
     return () => {
       didUnmount.current = true;
     };
@@ -56,15 +111,17 @@ export const WebSocketDemo = () => {
       const pingSubscription = main$
         .pipe(
           filter((item: any) => item.ping),
-          switchMapTo(timer(0, 6000)),
+          // switchMapTo(timer(0, 6000)),
         )
-        .subscribe(() =>
+        .subscribe(({ ping }) => {
+          console.log(ping, 'ping ->');
+
           sendMessage(
             JSON.stringify({
-              pong: new Date().getTime(),
+              pong: ping,
             }),
-          ),
-        );
+          );
+        });
 
       const kLineSubscription = main$
         .pipe(
@@ -103,7 +160,7 @@ export const WebSocketDemo = () => {
     () =>
       sendMessage(
         JSON.stringify({
-          sub: `market.BTC-USDT.kline.1min`,
+          sub: `market.${huobiStore.currTard.symbol}.kline.${huobiStore.currTard.interval}`,
         }),
       ),
     [],
@@ -134,4 +191,6 @@ export const WebSocketDemo = () => {
       </div>
     </div>
   );
-};
+}
+
+export default observer(WebSocketDemo);
