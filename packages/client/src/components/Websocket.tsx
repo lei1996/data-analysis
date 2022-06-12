@@ -35,20 +35,29 @@ function annotationDrawExtend(ctx: any, coordinate: any, text: any) {
   ctx.font = '12px Roboto';
   ctx.fillStyle = '#2d6187';
   ctx.strokeStyle = '#2d6187';
-
+  // const text =
+  //   language === 'zh-CN'
+  //     ? `标记！${mark}${mark}${mark}`
+  //     : `Mark! ${mark}${mark}${mark}`;
   const textWidth = ctx.measureText(text).width;
   const startX = coordinate.x;
-  let startY = coordinate.y + 6;
+  let startY = coordinate.y - 6;
+  ctx.setLineDash([3, 3]);
   ctx.beginPath();
   ctx.moveTo(startX, startY);
-  startY += 5;
-  ctx.lineTo(startX - 4, startY);
-  ctx.lineTo(startX + 4, startY);
+  ctx.lineTo(startX, startY - 50);
+  ctx.closePath();
+  ctx.stroke();
+  startY -= 50;
+  ctx.beginPath();
+  ctx.moveTo(startX, startY);
+  ctx.lineTo(startX - 4, startY - 5);
+  ctx.lineTo(startX + 4, startY - 5);
   ctx.closePath();
   ctx.fill();
 
   const rectX = startX - textWidth / 2 - 6;
-  const rectY = startY;
+  const rectY = startY - 5 - 28;
   const rectWidth = textWidth + 12;
   const rectHeight = 28;
   const r = 2;
@@ -70,7 +79,7 @@ function annotationDrawExtend(ctx: any, coordinate: any, text: any) {
   ctx.fillStyle = '#fff';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
-  ctx.fillText(text, startX, startY + 14);
+  ctx.fillText(text, startX, startY - 5 - 14);
 }
 
 function WebSocketDemo() {
@@ -140,10 +149,14 @@ function WebSocketDemo() {
             {
               point: {
                 timestamp: x[x.length - 5].timestamp,
-                value: x[x.length - 3].close,
+                value: x[x.length - 5].high,
               },
               styles: {
                 position: 'point',
+                offset: [2, 0],
+                symbol: {
+                  type: 'custom',
+                },
               },
               drawExtend: (params) => {
                 const { ctx, coordinate } = params;
