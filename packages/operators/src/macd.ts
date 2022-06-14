@@ -22,13 +22,21 @@ import {
   delay,
 } from '@data-analysis/core';
 import { divideEquallyRx } from '@data-analysis/core/src/divideEqually';
-import { KLineBaseInterface } from '@data-analysis/types/kline.type';
 import { Business, Prev } from './base';
 import { equalizerRxOperator, orderHubRxOperator } from './core';
 import { EqualizerRxInterface } from './types/equalizer.Rx';
 import { OperatorInterface } from './types/macd';
 
 type OperatorType = typeof buyOperator | typeof sellOperator;
+
+interface KLineBaseInterface {
+  id: number; // 时间戳
+  open: BigSource; // 开盘价
+  close: BigSource; // 收盘价
+  low: BigSource; // 最低价
+  high: BigSource; // 最高价
+  volume: BigSource; // 成交量
+}
 
 // 查找最优解 入参
 interface AutoBestInterface {
@@ -92,39 +100,59 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
         share(),
       );
 
-      const buySubscription = share$
+      const buyShare$ = share$.pipe(
+        concatMap((x) => of({ result: x, best: buy.best })),
+        // tap(({best}) => console.log(best, '查看best')),
+        buyOperator(),
+        filter(() => isComplete() && adxIndicator.getResult().lt(99)),
+      );
+
+      const buyIsLockSubscription = buyShare$
         .pipe(
-          concatMap((x) => of({ result: x, best: buy.best })),
-          // tap(({best}) => console.log(best, '查看best')),
-          buyOperator(),
-          filter(() => isComplete() && adxIndicator.getResult().lt(99)),
+          concatMap((info) =>
+            of({
+              info,
+              _price: (currKLine as KLineBaseInterface).close,
+            }),
+          ),
+          orderHubRxOperator(3),
+          equalizerRxOperator(3),
         )
-        .subscribe({
-          next(item) {
-            if (!buy.isOpen && item.includes('开')) {
-              buy.isOpen = true;
-              console.log('多头', item);
-              subscriber.next(item);
-            } else if (buy.isOpen && item.includes('平')) {
-              buy.isOpen = false;
-              console.log('多头', item);
-              subscriber.next(item);
-            }
-          },
-          error(err) {
-            // We need to make sure we're propagating our errors through.
-            subscriber.error(err);
-          },
-          complete() {
-            subscriber.complete();
-          },
+        .subscribe((x) => {
+          console.log(
+            `beforeSum: ${x.beforeSum.toString()}, aftersum: ${x.aftersum.toString()}, isLock: ${
+              x.isLock
+            }`,
+          );
+          buy.isLock = x.isLock;
         });
+
+      const buySubscription = buyShare$.subscribe({
+        next(item) {
+          if (!buy.isOpen && !buy.isLock && item.includes('开')) {
+            buy.isOpen = true;
+            console.log('多头', item);
+            subscriber.next(item);
+          } else if (buy.isOpen && item.includes('平')) {
+            buy.isOpen = false;
+            console.log('多头', item);
+            subscriber.next(item);
+          }
+        },
+        error(err) {
+          // We need to make sure we're propagating our errors through.
+          subscriber.error(err);
+        },
+        complete() {
+          subscriber.complete();
+        },
+      });
 
       const autoBestShare$ = share$.pipe(
         concatMap((x) =>
           of({ result: x, item: currKLine as KLineBaseInterface }),
         ),
-        bufferCount(maxLength, 1), // 每间隔 1/3 k线发射一次值 第一次发射必须要填满 maxLength 根k线
+        bufferCount(maxLength, 4), // 每间隔 1/3 k线发射一次值 第一次发射必须要填满 maxLength 根k线
         map((x) =>
           x.reduce(
             (curr, { result, item }) => ({
@@ -166,17 +194,8 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
       const buyAutoBestSubscription = autoBestShare$
         .pipe(autoBestOperator(buyOperator, 3))
         .subscribe(([equalizerResult, best]) => {
-          // console.log(
-          //   currKLine,
-          //   new Big(equalizerResult.beforeSum).round(8).toString(),
-          //   new Big(equalizerResult.aftersum).round(8).toString(),
-          //   buy.best,
-          //   best,
-          //   // getNowTime(new Date().getTime()),
-          //   `开多 auto Best`,
-          // );
           buy.best = best;
-          // buy.isLock = equalizerResult.isLock;
+          buy.isLock = equalizerResult.isLock;
         });
 
       return () => {
@@ -184,6 +203,7 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
         buySubscription.unsubscribe();
         Subscription1.unsubscribe();
         buyAutoBestSubscription.unsubscribe();
+        buyIsLockSubscription.unsubscribe();
         // Clean up all state.
         macdIndicator = null!;
         volumeIndicator = null!;
@@ -214,7 +234,6 @@ const autoBestOperator = (operator: OperatorType, interval: number) => {
                       of({
                         info,
                         _price: kline.close,
-                        symbol: kline.symbol,
                       }),
                     ),
                     orderHubRxOperator(interval),

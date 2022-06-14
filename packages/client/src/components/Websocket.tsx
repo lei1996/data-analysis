@@ -1,12 +1,14 @@
 import {
   Big,
   concatMap,
+  delay,
   filter,
   from,
   map,
   of,
   share,
   switchMapTo,
+  tap,
   timer,
   toArray,
 } from '@data-analysis/core';
@@ -17,6 +19,7 @@ import useWebSocket, { ReadyState } from 'react-use-websocket';
 
 import { css } from 'linaria';
 
+import { makeSuObservable } from '@data-analysis/operators';
 import { timeHuobi } from '@data-analysis/utils';
 
 import { blobInflate } from '../utils/blobInflate';
@@ -35,10 +38,6 @@ function annotationDrawExtend(ctx: any, coordinate: any, text: any) {
   ctx.font = '12px Roboto';
   ctx.fillStyle = '#2d6187';
   ctx.strokeStyle = '#2d6187';
-  // const text =
-  //   language === 'zh-CN'
-  //     ? `标记！${mark}${mark}${mark}`
-  //     : `Mark! ${mark}${mark}${mark}`;
   const textWidth = ctx.measureText(text).width;
   const startX = coordinate.x;
   let startY = coordinate.y - 6;
@@ -144,26 +143,6 @@ function WebSocketDemo() {
         if (chartRef.current) {
           // 初始化 k线数据
           chartRef.current.applyNewData(x);
-
-          chartRef.current.createAnnotation([
-            {
-              point: {
-                timestamp: x[x.length - 5].timestamp,
-                value: x[x.length - 5].high,
-              },
-              styles: {
-                position: 'point',
-                offset: [2, 0],
-                symbol: {
-                  type: 'custom',
-                },
-              },
-              drawExtend: (params) => {
-                const { ctx, coordinate } = params;
-                annotationDrawExtend(ctx, coordinate, '这是一个固定显示标记');
-              },
-            },
-          ]);
         }
       });
 
@@ -307,6 +286,48 @@ function WebSocketDemo() {
     );
   }, []);
 
+  const runStrategy = () => {
+    let kline: any = {};
+
+    from(kLineStore.getKLineValue(huobiStore.currTard.symbol))
+      .pipe(
+        delay(20),
+        tap((x) => (kline = x)),
+        makeSuObservable(14),
+        concatMap((info: string) =>
+          of({ id: kline.id, info, close: kline.close, high: kline.high }),
+        ),
+        map(({ id, info, close, high }) => ({
+          point: {
+            timestamp: id,
+            value: high,
+          },
+          styles: {
+            position: 'point',
+            offset: [2, 0],
+            symbol: {
+              type: 'custom',
+            },
+          },
+          drawExtend: (params: any) => {
+            const { ctx, coordinate } = params;
+            annotationDrawExtend(
+              ctx,
+              coordinate,
+              `${info}, 价位:${close}`,
+            );
+          },
+        })),
+        toArray(),
+      )
+      .subscribe((x) => {
+        if (chartRef.current) {
+          chartRef.current.removeAnnotation();
+          chartRef.current.createAnnotation(x);
+        }
+      });
+  };
+
   const connectionStatus = {
     [ReadyState.CONNECTING]: 'Connecting',
     [ReadyState.OPEN]: 'Open',
@@ -325,6 +346,11 @@ function WebSocketDemo() {
         disabled={readyState !== ReadyState.OPEN}
       >
         Click Me to send 'Hello'
+      </button>
+      <button
+        onClick={runStrategy}
+      >
+        runStrategy
       </button>
       <span>The WebSocket is currently {connectionStatus}</span>
       <div className={styles.klineChartContainer}>
