@@ -38,28 +38,28 @@ function annotationDrawExtend(ctx: any, coordinate: any, text: any) {
   ctx.font = '12px Roboto';
   ctx.fillStyle = '#2d6187';
   ctx.strokeStyle = '#2d6187';
-  const textWidth = ctx.measureText(text).width;
-  const startX = coordinate.x;
-  let startY = coordinate.y - 6;
-  ctx.setLineDash([3, 3]);
-  ctx.beginPath();
-  ctx.moveTo(startX, startY);
-  ctx.lineTo(startX, startY - 50);
-  ctx.closePath();
-  ctx.stroke();
-  startY -= 50;
-  ctx.beginPath();
-  ctx.moveTo(startX, startY);
-  ctx.lineTo(startX - 4, startY - 5);
-  ctx.lineTo(startX + 4, startY - 5);
-  ctx.closePath();
-  ctx.fill();
+  const textWidth = ctx.measureText(text).width; // 计算文本宽度
+  const startX = coordinate.x; // 默认 x轴 起始点
+  let startY = coordinate.y - 6; // 默认 y轴 起始点
+  ctx.setLineDash([3, 3]); // 设置成虚线
+  ctx.beginPath(); // 开始绘制线
+  ctx.moveTo(startX, startY); // 起始点
+  ctx.lineTo(startX, startY - 50); // 终止点
+  ctx.closePath(); // 结束绘制
+  ctx.stroke(); // 在 canvas 上绘图
+  startY -= 50; // 将y轴 - 50像素
+  ctx.beginPath(); // 开始绘制三角形
+  ctx.moveTo(startX, startY); // 起始点
+  ctx.lineTo(startX - 4, startY - 5); // 左上角 的点
+  ctx.lineTo(startX + 4, startY - 5); // 右上角 的点
+  ctx.closePath(); // 合并选区成一个三角形
+  ctx.fill(); // 在 canvas 上绘图
 
-  const rectX = startX - textWidth / 2 - 6;
-  const rectY = startY - 5 - 28;
-  const rectWidth = textWidth + 12;
-  const rectHeight = 28;
-  const r = 2;
+  const rectX = startX - textWidth / 2 - 6; // 矩形左上角 x轴 的点
+  const rectY = startY - 5 - 28; // 矩形左上角 y轴 的点
+  const rectWidth = textWidth + 12; // 矩形宽度
+  const rectHeight = 28; // 矩形高度
+  const r = 2; // 圆角
   ctx.beginPath();
   ctx.moveTo(rectX + r, rectY);
   ctx.arcTo(rectX + rectWidth, rectY, rectX + rectWidth, rectY + rectHeight, r);
@@ -75,6 +75,7 @@ function annotationDrawExtend(ctx: any, coordinate: any, text: any) {
   ctx.closePath();
   ctx.fill();
 
+  // 绘制文字
   ctx.fillStyle = '#fff';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'center';
@@ -143,6 +144,29 @@ function WebSocketDemo() {
         if (chartRef.current) {
           // 初始化 k线数据
           chartRef.current.applyNewData(x);
+          chartRef.current.createAnnotation([
+            {
+              point: {
+                timestamp: x[x.length - 3].timestamp,
+                value: x[x.length - 3].high,
+              },
+              styles: {
+                position: 'point',
+                offset: [2, 0],
+                symbol: {
+                  type: 'custom',
+                },
+              },
+              drawExtend: (params: any) => {
+                const { ctx, coordinate } = params;
+                annotationDrawExtend(
+                  ctx,
+                  coordinate,
+                  `test 数据`,
+                );
+              },
+            }
+          ]);
         }
       });
 
