@@ -4,8 +4,11 @@ import {
   delay,
   filter,
   from,
+  groupBy,
   map,
+  mergeMap,
   of,
+  reduce,
   share,
   switchMapTo,
   tap,
@@ -321,20 +324,26 @@ function WebSocketDemo() {
   const runStrategy = () => {
     let kline: any = {};
 
-    from(kLineStore.getKLineValue(huobiStore.currTard.symbol))
+    const share$ = from(
+      kLineStore.getKLineValue(huobiStore.currTard.symbol),
+    ).pipe(
+      delay(20),
+      tap((x) => (kline = x)),
+      makeSuObservable(14),
+      concatMap((info: string) =>
+        of({
+          id: kline.id,
+          info,
+          close: kline.close,
+          high: kline.high,
+          low: kline.low,
+        }),
+      ),
+      share(),
+    );
+
+    share$
       .pipe(
-        delay(20),
-        tap((x) => (kline = x)),
-        makeSuObservable(14),
-        concatMap((info: string) =>
-          of({
-            id: kline.id,
-            info,
-            close: kline.close,
-            high: kline.high,
-            low: kline.low,
-          }),
-        ),
         map(({ id, info, close, high, low }) => ({
           point: {
             timestamp: id,
@@ -365,6 +374,54 @@ function WebSocketDemo() {
           chartRef.current.createAnnotation(x);
         }
       });
+
+    share$
+      .pipe(
+        groupBy(({ info }) => info === '开多' || info === '平空'),
+        mergeMap((group$) =>
+          group$.pipe(
+            reduce(
+              (acc, cur) => [...acc, cur],
+              [] as {
+                id: any;
+                info: string;
+                close: any;
+                high: any;
+                low: any;
+              }[],
+            ),
+          ),
+        ),
+        concatMap((items) => {
+          const obj = {
+            sum: new Big(0),
+            prev: new Big(0),
+          };
+
+          let dir = '';
+
+          for (const item of items) {
+            const { info, close } = item;
+
+            if (info.includes('开')) {
+              obj.prev = new Big(close);
+            } else if (info.includes('平')) {
+              dir = info.includes('空') ? 'buy' : 'sell';
+
+              obj.sum = obj.sum.plus(
+                info.includes('空')
+                  ? new Big(close).minus(obj.prev)
+                  : new Big(obj.prev).minus(close),
+              );
+            }
+          }
+
+          return of({ sum: obj.sum, info: dir });
+        }),
+      )
+      .subscribe(({ info, sum }) =>
+        console.log(info, sum.toString(), 'x -> 分组数据'),
+      );
   };
 
   const connectionStatus = {
