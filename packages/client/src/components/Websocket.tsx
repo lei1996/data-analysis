@@ -34,6 +34,9 @@ const styles = {
   `,
 };
 
+const isBuy = (info: string) =>
+  info === '开多' || info === '平空' ? 'buy' : 'sell';
+
 function annotationDrawExtend(
   ctx: any,
   coordinate: any,
@@ -324,12 +327,18 @@ function WebSocketDemo() {
         tap((x) => (kline = x)),
         makeSuObservable(14),
         concatMap((info: string) =>
-          of({ id: kline.id, info, close: kline.close, high: kline.high }),
+          of({
+            id: kline.id,
+            info,
+            close: kline.close,
+            high: kline.high,
+            low: kline.low,
+          }),
         ),
-        map(({ id, info, close, high }) => ({
+        map(({ id, info, close, high, low }) => ({
           point: {
             timestamp: id,
-            value: high,
+            value: isBuy(info) === 'buy' ? low : high,
           },
           styles: {
             position: 'point',
@@ -344,7 +353,7 @@ function WebSocketDemo() {
               ctx,
               coordinate,
               `${info}, 价位:${close}`,
-              info === '开多' || info === '平空' ? 'buy' : 'sell',
+              isBuy(info),
             );
           },
         })),

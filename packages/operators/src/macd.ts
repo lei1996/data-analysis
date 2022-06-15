@@ -50,6 +50,7 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
     new Observable<string>((subscriber: Subscriber<string>) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
       let buy = new Business();
+      let sell = new Business();
       let macdIndicator = new MACD({
         indicator: EMA,
         shortInterval: 6,
@@ -102,8 +103,13 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
 
       const buyShare$ = share$.pipe(
         concatMap((x) => of({ result: x, best: buy.best })),
-        // tap(({best}) => console.log(best, '查看best')),
         buyOperator(),
+        filter(() => isComplete() && adxIndicator.getResult().lt(99)),
+      );
+
+      const sellShare$ = share$.pipe(
+        concatMap((x) => of({ result: x, best: sell.best })),
+        sellOperator(),
         filter(() => isComplete() && adxIndicator.getResult().lt(99)),
       );
 
@@ -126,6 +132,25 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
           );
           buy.isLock = x.isLock;
         });
+      const sellIsLockSubscription = sellShare$
+        .pipe(
+          concatMap((info) =>
+            of({
+              info,
+              _price: (currKLine as KLineBaseInterface).close,
+            }),
+          ),
+          orderHubRxOperator(3),
+          equalizerRxOperator(3),
+        )
+        .subscribe((x) => {
+          console.log(
+            `beforeSum: ${x.beforeSum.toString()}, aftersum: ${x.aftersum.toString()}, isLock: ${
+              x.isLock
+            }`,
+          );
+          sell.isLock = x.isLock;
+        });
 
       const buySubscription = buyShare$.subscribe({
         next(item) {
@@ -147,12 +172,32 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
           subscriber.complete();
         },
       });
+      const sellSubscription = sellShare$.subscribe({
+        next(item) {
+          if (!sell.isOpen && !sell.isLock && item.includes('开')) {
+            sell.isOpen = true;
+            console.log('空头', item);
+            subscriber.next(item);
+          } else if (sell.isOpen && item.includes('平')) {
+            sell.isOpen = false;
+            console.log('空头', item);
+            subscriber.next(item);
+          }
+        },
+        error(err) {
+          // We need to make sure we're propagating our errors through.
+          subscriber.error(err);
+        },
+        complete() {
+          subscriber.complete();
+        },
+      });
 
       const autoBestShare$ = share$.pipe(
         concatMap((x) =>
           of({ result: x, item: currKLine as KLineBaseInterface }),
         ),
-        bufferCount(maxLength, 4), // 每间隔 1/3 k线发射一次值 第一次发射必须要填满 maxLength 根k线
+        bufferCount(maxLength, 32), // 每间隔 1/3 k线发射一次值 第一次发射必须要填满 maxLength 根k线
         map((x) =>
           x.reduce(
             (curr, { result, item }) => ({
@@ -172,7 +217,7 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
         concatMap(({ klines, maxminArrs, maxVal, minVal }) => {
           return divideEquallyRx(minVal, maxVal, 10).pipe(
             concatMap((nums) => {
-              const result = {
+              const result: any = {
                 bests: [] as number[][],
                 maxminArrs,
                 klines,
@@ -198,12 +243,22 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
           buy.isLock = equalizerResult.isLock;
         });
 
+      const sellAutoBestSubscription = autoBestShare$
+        .pipe(autoBestOperator(sellOperator, 3))
+        .subscribe(([equalizerResult, best]) => {
+          sell.best = best;
+          sell.isLock = equalizerResult.isLock;
+        });
+
       return () => {
         console.log('makeSuObservable 清空状态');
-        buySubscription.unsubscribe();
         Subscription1.unsubscribe();
-        buyAutoBestSubscription.unsubscribe();
+        buySubscription.unsubscribe();
         buyIsLockSubscription.unsubscribe();
+        buyAutoBestSubscription.unsubscribe();
+        sellSubscription.unsubscribe();
+        sellIsLockSubscription.unsubscribe();
+        sellAutoBestSubscription.unsubscribe();
         // Clean up all state.
         macdIndicator = null!;
         volumeIndicator = null!;
