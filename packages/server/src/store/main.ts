@@ -1,3 +1,4 @@
+import { makeSuObservable } from './../../../operators/src/macd';
 import {
   defer,
   concatMap,
@@ -10,6 +11,10 @@ import {
   zip,
   reduce,
   map,
+  delay,
+  tap,
+  groupBy,
+  mergeMap,
 } from '@data-analysis/core';
 import axios from '@data-analysis/utils/axios';
 import { spliceURL } from '@data-analysis/utils/spliceURL';
@@ -46,6 +51,7 @@ class MainStore {
 
   onLoad() {
     console.log('hello');
+    let kline: any = {};
     const { symbol, interval, limit = '' } = this.currTard;
     this.fetchKLine({
       symbol,
@@ -60,7 +66,7 @@ class MainStore {
             .minus(new Big(1).times(timeHuobi[interval]).times(1000))
             .toString();
 
-          for (let i = 0; i < 30; i++) {
+          for (let i = 0; i < 2; i++) {
             const startTime = new Big(rightTimestamp)
               .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
               .toString();
@@ -90,10 +96,68 @@ class MainStore {
             map((curr) => [...curr, ...item]),
           );
         }),
+        concatMap((item) =>
+          from(item).pipe(
+            delay(20),
+            tap((x) => (kline = x)),
+            makeSuObservable(14),
+            concatMap((info: string) =>
+              of({
+                id: kline.id,
+                info,
+                close: kline.close,
+                high: kline.high,
+                low: kline.low,
+              }),
+            ),
+          ),
+        ),
+        groupBy(({ info }) => info === '开多' || info === '平空'),
+        mergeMap((group$) =>
+          group$.pipe(
+            reduce(
+              (acc, cur) => [...acc, cur],
+              [] as {
+                id: any;
+                info: string;
+                close: any;
+                high: any;
+                low: any;
+              }[],
+            ),
+          ),
+        ),
+        // tap(x => console.log(x, '分组数据')),
+        concatMap((items) => {
+          const obj = {
+            sum: new Big(0),
+            prev: new Big(0),
+          };
+
+          let dir = '';
+
+          for (const item of items) {
+            const { info, close } = item;
+
+            if (info.includes('开')) {
+              obj.prev = new Big(close);
+            } else if (info.includes('平')) {
+              dir = info.includes('空') ? 'buy' : 'sell';
+
+              obj.sum = obj.sum.plus(
+                info.includes('空')
+                  ? new Big(close).minus(obj.prev)
+                  : new Big(obj.prev).minus(close),
+              );
+            }
+          }
+
+          return of({ sum: obj.sum, info: dir });
+        }),
       )
-      .subscribe((x) => {
-        console.log(x, '合并k线');
-      });
+      .subscribe(({ info, sum }) =>
+        console.log(info, sum.toString(), 'x -> 分组数据'),
+      );
   }
 
   fetchKLine(kline: KLineParamsInterface): Observable<KLineInterface[]> {
