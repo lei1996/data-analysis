@@ -197,7 +197,7 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
         concatMap((x) =>
           of({ result: x, item: currKLine as KLineBaseInterface }),
         ),
-        bufferCount(maxLength, 32), // 每间隔 1/3 k线发射一次值 第一次发射必须要填满 maxLength 根k线
+        bufferCount(maxLength, 8), // 每间隔 1/3 k线发射一次值 第一次发射必须要填满 maxLength 根k线
         map((x) =>
           x.reduce(
             (curr, { result, item }) => ({
