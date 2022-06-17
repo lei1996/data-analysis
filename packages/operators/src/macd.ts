@@ -223,10 +223,10 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
                 klines,
               };
 
-              for (let i = 0; i < nums.length - 1; i++) {
-                for (let j = i + 1; j < nums.length; j++) {
-                  result.bests.push([nums[i], nums[j]]);
-                }
+              for (let i = 1; i < nums.length - 1; i++) {
+                // for (let j = i + 1; j < nums.length - 1; j++) {
+                result.bests.push([nums[i], nums[i]]);
+                // }
               }
 
               return of(result);
