@@ -88,11 +88,11 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
         concatMap((item) => {
           const { close } = item;
           currKLine = item;
-          count++;
-
+          
           macdIndicator.update(close);
-
+          
           if (macdIndicator.isStable) {
+            count++;
             const { histogram } = macdIndicator.getResult();
             return of(histogram);
           }
