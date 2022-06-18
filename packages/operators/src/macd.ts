@@ -53,9 +53,9 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
       let sell = new Business();
       let macdIndicator = new MACD({
         indicator: EMA,
-        shortInterval: 6,
-        longInterval: 13,
-        signalInterval: 4,
+        shortInterval: 20,
+        longInterval: 25,
+        signalInterval: 12,
       });
       let volumeIndicator = new RSI(interval); // 量的 RSI 值
       let adxIndicator = new ADX(interval); // 当前趋势 值
@@ -339,60 +339,6 @@ export const buyOperator = () => {
       let prev: Prev = '';
       let isOpen: boolean = false;
 
-      const subscription = observable
-        // .pipe(
-        //   tap(() => console.log(prev, isOpen)),
-        //   delay(20),
-        // )
-        .subscribe({
-          next({ result, best }) {
-            let info: string = '';
-
-            const [upper, lower] = best;
-            const hist = new Big(result);
-
-            if (hist.gt(upper) && isOpen && (prev === 'DOWN' || prev === '')) {
-              info = '平空';
-              prev = 'UP';
-              isOpen = false;
-            } else if (
-              hist.lt(lower) &&
-              !isOpen &&
-              (prev === 'UP' || prev === '')
-            ) {
-              info = '开多';
-              prev = 'DOWN';
-              isOpen = true;
-            }
-
-            if (!!info) {
-              subscriber.next(info);
-            }
-          },
-          error(err) {
-            // We need to make sure we're propagating our errors through.
-            subscriber.error(err);
-          },
-          complete() {
-            subscriber.complete();
-          },
-        });
-
-      return () => {
-        subscription.unsubscribe();
-        // Clean up all state.
-        // console.log('做多清空状态');
-      };
-    });
-};
-
-// 做空 - 操作符
-export const sellOperator = () => {
-  return (observable: Observable<OperatorInterface>) =>
-    new Observable<string>((subscriber: Subscriber<string>) => {
-      let prev: Prev = '';
-      let isOpen: boolean = false;
-
       const subscription = observable.subscribe({
         next({ result, best }) {
           let info: string = '';
@@ -401,7 +347,7 @@ export const sellOperator = () => {
           const hist = new Big(result);
 
           if (hist.gt(upper) && !isOpen && (prev === 'DOWN' || prev === '')) {
-            info = '开空';
+            info = '开多';
             prev = 'UP';
             isOpen = true;
           } else if (
@@ -409,7 +355,7 @@ export const sellOperator = () => {
             isOpen &&
             (prev === 'UP' || prev === '')
           ) {
-            info = '平多';
+            info = '平空';
             prev = 'DOWN';
             isOpen = false;
           }
@@ -426,6 +372,60 @@ export const sellOperator = () => {
           subscriber.complete();
         },
       });
+
+      return () => {
+        subscription.unsubscribe();
+        // Clean up all state.
+        // console.log('做多清空状态');
+      };
+    });
+};
+
+// 做空 - 操作符
+export const sellOperator = () => {
+  return (observable: Observable<OperatorInterface>) =>
+    new Observable<string>((subscriber: Subscriber<string>) => {
+      let prev: Prev = '';
+      let isOpen: boolean = false;
+
+      const subscription = observable
+        // .pipe(
+        //   tap(() => console.log(prev, isOpen)),
+        //   delay(20),
+        // )
+        .subscribe({
+          next({ result, best }) {
+            let info: string = '';
+
+            const [upper, lower] = best;
+            const hist = new Big(result);
+
+            if (hist.gt(upper) && isOpen && (prev === 'DOWN' || prev === '')) {
+              info = '平多';
+              prev = 'UP';
+              isOpen = false;
+            } else if (
+              hist.lt(lower) &&
+              !isOpen &&
+              (prev === 'UP' || prev === '')
+            ) {
+              info = '开空';
+              prev = 'DOWN';
+              isOpen = true;
+            }
+
+            if (!!info) {
+              subscriber.next(info);
+            }
+          },
+          error(err) {
+            // We need to make sure we're propagating our errors through.
+            subscriber.error(err);
+          },
+          complete() {
+            subscriber.complete();
+          },
+        });
 
       return () => {
         subscription.unsubscribe();

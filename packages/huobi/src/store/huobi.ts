@@ -236,7 +236,7 @@ class HuobiStore {
     //       console.log(x, '中途debug');
     //     }),
     //     mergeMap((x) =>
-    //       this.fetchHistoryKlines$(x.contract_code, '15min', 300, 14).pipe(
+    //       this.fetchHistoryKlines$(x.contract_code, '15min', 300, 26).pipe(
     //         map((orderInfo) => ({
     //           symbol: x.contract_code,
     //           quantityPrecision:
