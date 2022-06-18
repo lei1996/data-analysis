@@ -10,6 +10,7 @@ import {
   retry,
   Subject,
   pairwise,
+  delay,
 } from '@data-analysis/core';
 import {
   HuobiHttpClient,
@@ -229,7 +230,7 @@ class HuobiStore {
     // );
 
     // this.onLoad();
-    // this.main();
+    this.main();
     this.baseCoin.lastKLine
       .pipe(
         pairwise(),
@@ -255,6 +256,33 @@ class HuobiStore {
   }
 
   main() {
+    this.fetchSwapCrossOrder({
+      contract_code: 'SHIB-USDT',
+      volume: 1,
+      direction: 'buy',
+      offset: 'open',
+      lever_rate: 20,
+      order_price_type: 'post_only',
+      price: '0.00000400',
+    })
+      .pipe(
+        delay(5 * 1000),
+        concatMap((x) =>
+          this.fetchSwapCrossOrderInfo({
+            contract_code: 'SHIB-USDT',
+            order_id: x.order_id_str,
+          }).pipe(
+            filter(([orderInfo]) => orderInfo.status !== 6),
+            concatMap(() =>
+              this.fetchSwapCrossCancel({
+                contract_code: 'SHIB-USDT',
+                order_id: x.order_id_str,
+              }),
+            ),
+          ),
+        ),
+      )
+      .subscribe((x) => console.log(x, 'maker 单'));
     // this.fetchSwapContractInfo({})
     //   .pipe(
     //     take(this.maxOpenLimit),
@@ -351,15 +379,7 @@ class HuobiStore {
    * 合约下单
    */
   fetchSwapCrossOrder(info: SwapCrossOrderInterface) {
-    return this.huobiServices.fetchSwapCrossOrder(info).pipe(
-      map((x) => {
-        if (!!!x) {
-          throw `huobi 下单失败. 品种：${info.contract_code}, 开平仓: ${info.direction} ${info.offset}, 数量: ${info.volume}`;
-        }
-        return x;
-      }),
-      retry(3),
-    );
+    return this.huobiServices.fetchSwapCrossOrder(info);
   }
 
   /**
