@@ -2,40 +2,29 @@ import server from '@data-analysis/config/server';
 
 import {
   Big,
-  delay,
   filter,
   map,
-  mergeMap,
-  of,
-  tap,
-  take,
-  concatWith,
   concatMap,
   from,
-  throttleTime,
-  toArray,
   BigSource,
-  retryWhen,
+  retry,
+  Subject,
+  pairwise,
 } from '@data-analysis/core';
 import {
   HuobiHttpClient,
-  WebsocketKLineClient,
-  WebsocketNotificationClient,
-  websocketClient,
   inflateData,
-  makeWebsocketInstance,
   authData,
+  makeWebsocketInstance,
 } from '@data-analysis/crypto-huobi';
 import {
   kLinePeriod,
   SwapCrossCancelInterface,
-  MarketDepthResultInterface,
   MarketHistoryKlineInterface,
   SwapContractInfoInterface,
   SwapCrossAccountInfoResultInterface,
   SwapCrossOrderInterface,
   SwapCrossOrderInfoInterface,
-  SwapCrossPositionsCrossResultInterface,
 } from '@data-analysis/crypto-huobi/src/types';
 
 const orderEnum = {
@@ -48,22 +37,6 @@ const orderEnum = {
 type OffsetEx = '开' | '平';
 type DirectionEx = '多' | '空';
 
-interface HuobiOrderMapInterface {
-  openVolumn: {
-    buy: BigSource;
-    sell: BigSource;
-  };
-  leverRate: number;
-  depth: {
-    bids: [number, number][];
-    asks: [number, number][];
-  };
-  openMargin: {
-    buy: BigSource;
-    sell: BigSource;
-  };
-}
-
 interface OpenOrdersInterface {
   buy: BigSource;
   sell: BigSource;
@@ -74,45 +47,49 @@ interface DepthInterface {
   asks: [number, number][];
 }
 
+interface KLineInterface {
+  id: number; // 时间戳
+  open: BigSource; // 开盘价
+  close: BigSource; // 收盘价
+  low: BigSource; // 最低价
+  high: BigSource; // 最高价
+  volume: BigSource; // 成交量
+}
+
 class BaseCoin {
-  private symbol: string; // 品种
-  private openOrders: OpenOrdersInterface = {
+  openOrders: OpenOrdersInterface = {
     buy: new Big(0),
     sell: new Big(0),
   };
-  private leverRate: number = 20; // 杠杆倍数
+  leverRate: number = 20; // 杠杆倍数
   // 深度
   depth: DepthInterface = {
     bids: [],
     asks: [],
   };
 
-  constructor(symbol: string) {
-    // 初始化 Websocket KLine Client
-    // this.marketDepth(symbol);
-    // this.positions();
-    this.marketDepth(symbol);
-    this.positionCross(symbol);
+  private _kLine: Subject<KLineInterface> = new Subject<KLineInterface>();
 
-    this.symbol = symbol;
+  constructor(readonly symbol: string) {
+    // 初始化 Websocket KLine Client
+    this.marketDepthSubscribe(symbol);
+    this.positionCrossSubscribe(symbol);
+    this.kLineSubscribe(symbol, '1min');
   }
 
-  // marketDepth(symbol: string) {
-  //   this.websocketKLineClient
-  //     .marketDepth$(symbol, 'step6')
-  //     .pipe(throttleTime(1000))
-  //     .subscribe(({ symbol, ...rest }) => {
-  //       // console.log(rest, '深度数据 ->');
+  // 最新的k线数据
+  get lastKLine() {
+    return this._kLine.asObservable();
+  }
 
-  //       this.depth = rest;
-  //     });
-  // }
-
-  positionCross(symbol: string) {
+  // 持仓数据
+  positionCrossSubscribe(symbol: string) {
+    const url = 'api.hbdm.vn';
+    const path = '/linear-swap-notification';
     const authD = JSON.stringify(
       authData(
-        'api.hbdm.vn',
-        '/linear-swap-notification',
+        url,
+        path,
         server.huobi.profileConfig.accessKey,
         server.huobi.profileConfig.secretKey,
       ),
@@ -121,7 +98,7 @@ class BaseCoin {
     console.log(authD, 'authD ->');
 
     makeWebsocketInstance(
-      'wss://api.hbdm.vn/linear-swap-notification',
+      `wss://${url}${path}`,
       JSON.stringify({
         op: 'sub',
         topic: `positions_cross.${symbol}`,
@@ -158,12 +135,47 @@ class BaseCoin {
       },
       complete: () => {
         console.log('持仓变化数据 连接关闭');
-        this.positionCross(symbol);
+        this.positionCrossSubscribe(symbol);
       },
     });
   }
 
-  marketDepth(symbol: string) {
+  // k线数据
+  kLineSubscribe(symbol: string, interval: string) {
+    makeWebsocketInstance(
+      server.huobi.wsUrl,
+      JSON.stringify({
+        sub: `market.${symbol}.kline.${interval}`,
+      }),
+    ).subscribe({
+      next: (msg) => {
+        const data = inflateData(msg.data);
+
+        if (!!data.ch && (data.ch as string).includes('kline')) {
+          const { id, open, close, high, low, vol } = data.tick;
+
+          this._kLine.next({
+            id: id * 1000,
+            open,
+            close,
+            high,
+            low,
+            volume: vol,
+          });
+        }
+      },
+      error: (e) => {
+        console.log(e, '报错信息');
+      },
+      complete: () => {
+        console.log('k线数据 连接关闭');
+        this.kLineSubscribe(symbol, interval);
+      },
+    });
+  }
+
+  // 市场深度数据
+  marketDepthSubscribe(symbol: string) {
     makeWebsocketInstance(
       server.huobi.wsUrl,
       JSON.stringify({
@@ -186,7 +198,7 @@ class BaseCoin {
       },
       complete: () => {
         console.log('深度数据 连接关闭');
-        this.marketDepth(symbol);
+        this.marketDepthSubscribe(symbol);
       },
     });
   }
@@ -197,6 +209,7 @@ class HuobiStore {
   // private websocketKLineClient: WebsocketKLineClient;
   // private websocketNotificationClient: WebsocketNotificationClient;
   private baseCoin: BaseCoin = new BaseCoin('BTC-USDT');
+  private baseCoin1: BaseCoin = new BaseCoin('ETH-USDT');
   private accountInfo: SwapCrossAccountInfoResultInterface | {} = {};
   private maxOpenLimit: number = 1; // 最大开仓数
 
@@ -217,6 +230,20 @@ class HuobiStore {
 
     // this.onLoad();
     // this.main();
+    this.baseCoin.lastKLine
+      .pipe(
+        pairwise(),
+        filter((items) => items[0].id !== items[1].id),
+        map((x) => x[0]),
+      )
+      .subscribe((x) => console.log(x, 'k线数据'));
+    this.baseCoin1.lastKLine
+      .pipe(
+        pairwise(),
+        filter((items) => items[0].id !== items[1].id),
+        map((x) => x[0]),
+      )
+      .subscribe((x) => console.log(x, 'k线数据1'));
   }
 
   onLoad() {
@@ -331,12 +358,7 @@ class HuobiStore {
         }
         return x;
       }),
-      retryWhen((err) =>
-        err.pipe(
-          tap((err) => console.log(err)),
-          delay(60 * 1000),
-        ),
-      ),
+      retry(3),
     );
   }
 
