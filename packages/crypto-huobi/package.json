@@ -10,6 +10,7 @@
     "@data-analysis/utils": "^1.0.0",
     "crypto-js": "^4.1.1",
     "huobi-api-js": "^1.0.0",
+    "observable-socket": "^7.0.5",
     "pako": "^2.0.4",
     "qs": "^6.10.1",
     "ws": "^8.2.3"
