@@ -42,15 +42,17 @@ export class WebsocketNotificationClient {
     matchOrders_cross: false,
   };
 
-  private isRetry: boolean = false;
+  private symbol: string; // 交易对
 
   constructor(
     private readonly baseUrl: string = 'api.hbdm.vn',
     private readonly path: string = '/linear-swap-notification',
     private readonly accessKey: string,
     private readonly secretKey: string,
+    symbol: string = '*',
   ) {
     const WS_URL: string = `wss://${baseUrl}${path}`;
+    this.symbol = symbol;
     this.socket$ = makeWebsocket(WS_URL).pipe(this.source());
     this.auth({
       accessKey: this.accessKey,
@@ -73,7 +75,7 @@ export class WebsocketNotificationClient {
     this.input$.next(
       JSON.stringify({
         op: 'sub',
-        topic: `${topic}.*`,
+        topic: `${topic}.${this.symbol}`,
       }),
     );
   }
@@ -215,18 +217,17 @@ export class WebsocketNotificationClient {
    */
   private heartBeat() {
     this.socket$
-      .pipe(
-        filter((item) => item.op === 'ping'),
-        switchMapTo(timer(0, 6000)),
-      )
-      .subscribe(() =>
+      .pipe(filter((item) => item.op === 'ping'))
+      .subscribe(({ ping }) => {
+        console.log(ping, 'ping ->');
+
         this.input$.next(
           JSON.stringify({
             op: 'pong',
-            ts: new Date().getTime(),
+            ts: ping,
           }),
-        ),
-      );
+        );
+      });
   }
 
   /**

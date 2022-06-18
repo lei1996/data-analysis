@@ -176,17 +176,14 @@ export class WebsocketKLineClient {
    * 心跳包
    */
   private heartBeat() {
-    this.socket$
-      .pipe(
-        filter((item) => item.ping),
-        switchMapTo(timer(0, 6000)),
-      )
-      .subscribe(() =>
-        this.input$.next(
-          JSON.stringify({
-            pong: new Date().getTime(),
-          }),
-        ),
+    this.socket$.pipe(filter((item) => item.ping)).subscribe(({ ping }) => {
+      console.log(ping, 'ping ->');
+
+      this.input$.next(
+        JSON.stringify({
+          pong: ping,
+        }),
       );
+    });
   }
 }
