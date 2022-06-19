@@ -64,7 +64,7 @@ class MainStore {
             .minus(new Big(1).times(timeHuobi[interval]).times(1000))
             .toString();
 
-          for (let i = 0; i < 100; i++) {
+          for (let i = 0; i < 30; i++) {
             const startTime = new Big(rightTimestamp)
               .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
               .toString();

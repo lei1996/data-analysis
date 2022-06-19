@@ -88,9 +88,9 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
         concatMap((item) => {
           const { close } = item;
           currKLine = item;
-          
+
           macdIndicator.update(close);
-          
+
           if (macdIndicator.isStable) {
             count++;
             const { histogram } = macdIndicator.getResult();
@@ -339,55 +339,6 @@ export const buyOperator = () => {
       let prev: Prev = '';
       let isOpen: boolean = false;
 
-      const subscription = observable.subscribe({
-        next({ result, best }) {
-          let info: string = '';
-
-          const [upper, lower] = best;
-          const hist = new Big(result);
-
-          if (hist.gt(upper) && !isOpen && (prev === 'DOWN' || prev === '')) {
-            info = '开多';
-            prev = 'UP';
-            isOpen = true;
-          } else if (
-            hist.lt(lower) &&
-            isOpen &&
-            (prev === 'UP' || prev === '')
-          ) {
-            info = '平空';
-            prev = 'DOWN';
-            isOpen = false;
-          }
-
-          if (!!info) {
-            subscriber.next(info);
-          }
-        },
-        error(err) {
-          // We need to make sure we're propagating our errors through.
-          subscriber.error(err);
-        },
-        complete() {
-          subscriber.complete();
-        },
-      });
-
-      return () => {
-        subscription.unsubscribe();
-        // Clean up all state.
-        // console.log('做多清空状态');
-      };
-    });
-};
-
-// 做空 - 操作符
-export const sellOperator = () => {
-  return (observable: Observable<OperatorInterface>) =>
-    new Observable<string>((subscriber: Subscriber<string>) => {
-      let prev: Prev = '';
-      let isOpen: boolean = false;
-
       const subscription = observable
         // .pipe(
         //   tap(() => console.log(prev, isOpen)),
@@ -401,7 +352,7 @@ export const sellOperator = () => {
             const hist = new Big(result);
 
             if (hist.gt(upper) && isOpen && (prev === 'DOWN' || prev === '')) {
-              info = '平多';
+              info = '平空';
               prev = 'UP';
               isOpen = false;
             } else if (
@@ -409,7 +360,7 @@ export const sellOperator = () => {
               !isOpen &&
               (prev === 'UP' || prev === '')
             ) {
-              info = '开空';
+              info = '开多';
               prev = 'DOWN';
               isOpen = true;
             }
@@ -426,6 +377,55 @@ export const sellOperator = () => {
             subscriber.complete();
           },
         });
+
+      return () => {
+        subscription.unsubscribe();
+        // Clean up all state.
+        // console.log('做多清空状态');
+      };
+    });
+};
+
+// 做空 - 操作符
+export const sellOperator = () => {
+  return (observable: Observable<OperatorInterface>) =>
+    new Observable<string>((subscriber: Subscriber<string>) => {
+      let prev: Prev = '';
+      let isOpen: boolean = false;
+
+      const subscription = observable.subscribe({
+        next({ result, best }) {
+          let info: string = '';
+
+          const [upper, lower] = best;
+          const hist = new Big(result);
+
+          if (hist.gt(upper) && !isOpen && (prev === 'DOWN' || prev === '')) {
+            info = '开空';
+            prev = 'UP';
+            isOpen = true;
+          } else if (
+            hist.lt(lower) &&
+            isOpen &&
+            (prev === 'UP' || prev === '')
+          ) {
+            info = '平多';
+            prev = 'DOWN';
+            isOpen = false;
+          }
+
+          if (!!info) {
+            subscriber.next(info);
+          }
+        },
+        error(err) {
+          // We need to make sure we're propagating our errors through.
+          subscriber.error(err);
+        },
+        complete() {
+          subscriber.complete();
+        },
+      });
 
       return () => {
         subscription.unsubscribe();
