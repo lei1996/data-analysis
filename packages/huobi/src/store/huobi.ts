@@ -7,10 +7,10 @@ import {
   concatMap,
   from,
   BigSource,
-  retry,
   Subject,
   pairwise,
   delay,
+  Observable,
 } from '@data-analysis/core';
 import {
   HuobiHttpClient,
@@ -26,6 +26,8 @@ import {
   SwapCrossAccountInfoResultInterface,
   SwapCrossOrderInterface,
   SwapCrossOrderInfoInterface,
+  Direction,
+  Offset,
 } from '@data-analysis/crypto-huobi/src/types';
 
 const orderEnum = {
@@ -205,6 +207,14 @@ class BaseCoin {
   }
 }
 
+interface AutoSwapCrossOrderInterface {
+  contract_code: string;
+  volume: number;
+  direction: Direction;
+  offset: Offset;
+  lever_rate: number;
+}
+
 class HuobiStore {
   private huobiServices: HuobiHttpClient;
   // private websocketKLineClient: WebsocketKLineClient;
@@ -256,33 +266,13 @@ class HuobiStore {
   }
 
   main() {
-    this.fetchSwapCrossOrder({
+    this.autoSwapCrossOrder({
       contract_code: 'SHIB-USDT',
       volume: 1,
       direction: 'buy',
       offset: 'open',
       lever_rate: 20,
-      order_price_type: 'post_only',
-      price: '0.00000400',
-    })
-      .pipe(
-        delay(5 * 1000),
-        concatMap((x) =>
-          this.fetchSwapCrossOrderInfo({
-            contract_code: 'SHIB-USDT',
-            order_id: x.order_id_str,
-          }).pipe(
-            filter(([orderInfo]) => orderInfo.status !== 6),
-            concatMap(() =>
-              this.fetchSwapCrossCancel({
-                contract_code: 'SHIB-USDT',
-                order_id: x.order_id_str,
-              }),
-            ),
-          ),
-        ),
-      )
-      .subscribe((x) => console.log(x, 'maker 单'));
+    }).subscribe((x) => console.log(x, 'maker 单'));
     // this.fetchSwapContractInfo({})
     //   .pipe(
     //     take(this.maxOpenLimit),
@@ -356,6 +346,32 @@ class HuobiStore {
     //     ),
     //   )
     //   .subscribe((x) => console.log(x, '开仓'));
+  }
+
+  autoSwapCrossOrder(order: AutoSwapCrossOrderInterface): Observable<any> {
+    return this.fetchSwapCrossOrder({
+      ...order,
+      order_price_type: 'post_only',
+      price: '0.00000400',
+    }).pipe(
+      delay(10 * 1000),
+      filter(x => !!x),
+      concatMap((x) =>
+        this.fetchSwapCrossOrderInfo({
+          contract_code: 'SHIB-USDT',
+          order_id: x.order_id_str,
+        }).pipe(
+          filter(([orderInfo]) => orderInfo.status !== 6),
+          concatMap(() =>
+            this.fetchSwapCrossCancel({
+              contract_code: 'SHIB-USDT',
+              order_id: x.order_id_str,
+            }),
+          ),
+          concatMap(() => this.autoSwapCrossOrder(order)),
+        ),
+      ),
+    );
   }
 
   /**

@@ -53,9 +53,9 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
       let sell = new Business();
       let macdIndicator = new MACD({
         indicator: EMA,
-        shortInterval: 20,
-        longInterval: 25,
-        signalInterval: 12,
+        shortInterval: 6,
+        longInterval: 13,
+        signalInterval: 4,
       });
       let volumeIndicator = new RSI(interval); // 量的 RSI 值
       let adxIndicator = new ADX(interval); // 当前趋势 值
