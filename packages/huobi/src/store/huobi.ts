@@ -13,6 +13,10 @@ import {
   Observable,
   timer,
   take,
+  concatWith,
+  of,
+  tap,
+  mergeMap,
 } from '@data-analysis/core';
 import {
   HuobiHttpClient,
@@ -31,6 +35,8 @@ import {
   Direction,
   Offset,
 } from '@data-analysis/crypto-huobi/src/types';
+
+import { makeSuObservable } from '@data-analysis/operators/src/macd';
 
 const orderEnum = {
   空: 'buy',
@@ -75,11 +81,11 @@ class BaseCoin {
 
   private _kLine: Subject<KLineInterface> = new Subject<KLineInterface>();
 
-  constructor(readonly symbol: string) {
+  constructor(readonly symbol: string, interval: string) {
     // 初始化 Websocket KLine Client
     this.marketDepthSubscribe(symbol);
     this.positionCrossSubscribe(symbol);
-    this.kLineSubscribe(symbol, '1min');
+    this.kLineSubscribe(symbol, interval);
   }
 
   // 最新的k线数据
@@ -220,8 +226,7 @@ interface AutoSwapCrossOrderInterface {
 class HuobiStore {
   private huobiServices: HuobiHttpClient;
   private map: Map<string, BaseCoin> = new Map<string, BaseCoin>();
-  private accountInfo: SwapCrossAccountInfoResultInterface | {} = {};
-  private maxOpenLimit: number = 1; // 最大开仓数
+  private maxSymbolLimit: number = 1; // 最大执行品种数
 
   constructor() {
     // 初始化 Http Client
@@ -230,114 +235,92 @@ class HuobiStore {
       secretKey: server.huobi.profileConfig.secretKey,
     });
 
-    // this.onLoad();
+    this.onLoad();
     this.main();
-    this.map.set('BTC-USDT', new BaseCoin('BTC-USDT'));
-    this.getMapValue('BTC-USDT')
-      .lastKLine.pipe(
-        pairwise(),
-        filter((items) => items[0].id !== items[1].id),
-        map((x) => x[0]),
-      )
-      .subscribe((x) => console.log(x, 'k线数据'));
   }
 
   onLoad() {
-    // websocket 推送账户权益
-    // this.websocketNotificationClient.accounts$().subscribe((x) => {
-    //   console.log(x[0], '账户权益 ->');
-    //   this.accountInfo = x[0];
-    // });
+    this.map.set('BTC-USDT', new BaseCoin('BTC-USDT', '15min'));
   }
 
   main() {
-    timer(5000, 5000)
-      .pipe(
-        take(1),
-        concatMap(() =>
-          this.autoSwapCrossOrder({
-            contract_code: 'BTC-USDT',
-            volume: 1,
-            direction: 'buy',
-            offset: 'open',
-            lever_rate: 200,
-          }),
-        ),
-      )
-      .subscribe((x) => console.log(x, 'maker 单'));
-    // this.fetchSwapContractInfo({})
+    // timer(5000, 5000)
     //   .pipe(
-    //     take(this.maxOpenLimit),
-    //     concatMap((x) => of(x).pipe(delay(10 * 1000))),
-    //     tap((x) => {
-    //       console.log(x, '中途debug');
-    //     }),
-    //     mergeMap((x) =>
-    //       this.fetchHistoryKlines$(x.contract_code, '15min', 300, 26).pipe(
-    //         map((orderInfo) => ({
-    //           symbol: x.contract_code,
-    //           quantityPrecision:
-    //             x.price_tick.toString().split('.').pop()?.length ?? 1, // 合约价格精度
-    //           orderInfo: orderInfo.info,
-    //           stop: orderInfo.stop,
-    //         })),
-    //         filter((x) => {
-    //           const accountInfo = this
-    //             .accountInfo as SwapCrossAccountInfoResultInterface;
-    //           return !(
-    //             x.orderInfo.includes('开') &&
-    //             new Big(accountInfo.withdraw_available || 0.1)
-    //               .div(
-    //                 // 实际权益
-    //                 new Big(accountInfo.margin_static).plus(
-    //                   accountInfo.profit_unreal,
-    //                 ) || 0.1,
-    //               )
-    //               .lt(0.7)
-    //           );
-    //         }), // 可用权益低于 30% 停止开仓
-    //         concatMap((order) => {
-    //           console.log(order, 'debug 在并发任务里面使用concatMap');
-    //           const [a, b] = order.orderInfo.split('');
-    //           const offset = orderEnum[a as OffsetEx];
-    //           const direction = orderEnum[b as DirectionEx];
-    //           let qty: number = 0; // 数量
-    //           const stop: any = {};
-    //           if (order.orderInfo.includes('开')) {
-    //             qty = 1;
-    //             stop['tp_trigger_price'] = new Big(order.stop ?? 0)
-    //               .round(order.quantityPrecision)
-    //               .toString();
-    //             stop['tp_order_price_type'] = 'optimal_20';
-    //           } else {
-    //             qty = new Big(1).toNumber();
-    //             console.log(qty, order.symbol, map, '平仓 qty');
-    //           }
-    //           // 最小开仓数 * 开仓系数 * 系统允许的精度 = 开仓数量
-    //           return of({
-    //             volume: qty,
-    //             stop,
-    //             order,
-    //           }).pipe(
-    //             delay(1500),
-    //             filter(({ volume }) => volume !== 0),
-    //             concatMap(({ volume, stop, order }) =>
-    //               this.fetchSwapCrossOrder({
-    //                 contract_code: order.symbol,
-    //                 volume,
-    //                 direction,
-    //                 offset,
-    //                 lever_rate: '20',
-    //                 order_price_type: 'optimal_20',
-    //                 ...stop,
-    //               }),
-    //             ),
-    //           );
-    //         }),
-    //       ),
+    //     take(1),
+    //     concatMap(() =>
+    //       this.autoSwapCrossOrder({
+    //         contract_code: 'BTC-USDT',
+    //         volume: 1,
+    //         direction: 'buy',
+    //         offset: 'open',
+    //         lever_rate: 200,
+    //       }),
     //     ),
     //   )
-    //   .subscribe((x) => console.log(x, '开仓'));
+    //   .subscribe((x) => console.log(x, 'maker 单'));
+
+    this.fetchSwapContractInfo({})
+      .pipe(
+        take(this.maxSymbolLimit),
+        concatMap((x) => of(x).pipe(delay(5 * 1000))),
+        tap((x) => {
+          console.log(x, '中途debug');
+        }),
+        mergeMap((x) => {
+          return this.fetchHistoryKlines$(
+            x.contract_code,
+            '15min',
+            300,
+            14,
+          ).pipe(
+            makeSuObservable(14),
+            map((orderInfo) => ({
+              symbol: x.contract_code,
+              quantityPrecision:
+                x.price_tick.toString().split('.').pop()?.length ?? 1, // 合约价格精度
+              orderInfo: orderInfo,
+            })),
+            concatMap((order) => {
+              console.log(order, 'debug 在并发任务里面使用concatMap');
+              const [a, b] = order.orderInfo.split('');
+              const offset = orderEnum[a as OffsetEx];
+              const direction = orderEnum[b as DirectionEx];
+              const leverRate = this.getMapValue('BTC-USDT').leverRate;
+
+              let qty: number = 0; // 数量
+
+              if (order.orderInfo.includes('开')) {
+                qty = 1;
+              } else if (order.orderInfo.includes('平')) {
+                const { buy, sell } = this.getMapValue(order.symbol).openOrders;
+                qty = new Big(
+                  order.orderInfo.includes('空') ? buy : sell,
+                ).toNumber();
+              }
+
+              return of({
+                volume: qty,
+                symbol: order.symbol,
+                offset,
+                direction,
+                leverRate,
+              }).pipe(
+                filter(({ volume }) => volume !== 0),
+                concatMap(({ volume, symbol, offset, direction, leverRate }) =>
+                  this.autoSwapCrossOrder({
+                    contract_code: symbol,
+                    volume: volume,
+                    direction: direction,
+                    offset: offset,
+                    lever_rate: leverRate,
+                  }),
+                ),
+              );
+            }),
+          );
+        }),
+      )
+      .subscribe((x) => console.log(x, '开/平仓'));
   }
 
   autoSwapCrossOrder(order: AutoSwapCrossOrderInterface): Observable<any> {
@@ -402,10 +385,30 @@ class HuobiStore {
   /**
    * 获取k线数据
    */
-  fetchHistoryKline(info: MarketHistoryKlineInterface) {
-    return this.huobiServices
-      .fetchMarketHistoryKline(info)
-      .pipe(map((x) => ({ ...x, symbol: info.contract_code })));
+  fetchHistoryKline(
+    info: MarketHistoryKlineInterface,
+  ): Observable<KLineInterface> {
+    return this.huobiServices.fetchMarketHistoryKline(info).pipe(
+      map(({ id, high, low, open, close, vol }) => ({
+        id: id * 1000,
+        open,
+        close,
+        high,
+        low,
+        volume: vol,
+      })),
+    );
+  }
+
+  /**
+   * websocket 推送k线数据
+   */
+  wsKlines$(symbol: string) {
+    return this.getMapValue(symbol).lastKLine.pipe(
+      pairwise(),
+      filter((items) => items[0].id !== items[1].id),
+      map((x) => x[0]),
+    );
   }
 
   /**
@@ -418,13 +421,11 @@ class HuobiStore {
     offset: number = 14,
     mergeLength: number = 1,
   ) {
-    // return this.fetchHistoryKline({
-    //   contract_code,
-    //   period,
-    //   size: size * mergeLength + (offset + 1),
-    // }).pipe(
-    //   concatWith(this.websocketKLineClient.wsKline$(contract_code, period)),
-    // );
+    return this.fetchHistoryKline({
+      contract_code,
+      period,
+      size: size * mergeLength + (offset + 1),
+    }).pipe(concatWith(this.wsKlines$(contract_code)));
   }
 
   /**
@@ -447,7 +448,7 @@ class HuobiStore {
    * @returns
    */
   getMapValue(symbol: string) {
-    return this.map.get(symbol) ?? new BaseCoin('BTC-USDT');
+    return this.map.get(symbol) ?? new BaseCoin('BTC-USDT', '15min');
   }
 }
 

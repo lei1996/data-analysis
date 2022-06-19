@@ -187,65 +187,6 @@ export const makeRsiObservable = (interval: number) => {
     );
 };
 
-export const makeSuObservable = (interval: number) => {
-  return (observable: Observable<KLineBaseInterface>) =>
-    new Observable<[KLineBaseInterface, BigSource]>(
-      (subscriber: Subscriber<[KLineBaseInterface, BigSource]>) => {
-        let macdIndicator = new MACD({
-          indicator: EMA,
-          shortInterval: 6,
-          longInterval: 13,
-          signalInterval: 4,
-        });
-        let volumeIndicator = new RSI(interval); // 量的 RSI 值
-        let adxIndicator = new ADX(interval); // 当前趋势 值
-
-        const main$ = observable.pipe(share());
-
-        const Subscription1 = main$.subscribe({
-          next(item) {
-            const { high, low, close, volume } = item;
-
-            volumeIndicator.update(volume);
-            adxIndicator.update({ high, low, close });
-          },
-          error(err) {
-            // We need to make sure we're propagating our errors through.
-            subscriber.error(err);
-          },
-          complete() {
-            subscriber.complete();
-          },
-        });
-
-        const mainSubscription = main$.subscribe({
-          next(item) {
-            const { close } = item;
-
-            macdIndicator.update(close);
-          },
-          error(err) {
-            // We need to make sure we're propagating our errors through.
-            subscriber.error(err);
-          },
-          complete() {
-            subscriber.complete();
-          },
-        });
-
-        return () => {
-          console.log('makeSuObservable 清空状态');
-          mainSubscription.unsubscribe();
-          Subscription1.unsubscribe();
-          // Clean up all state.
-          macdIndicator = null!;
-          volumeIndicator = null!;
-          adxIndicator = null!;
-        };
-      },
-    );
-};
-
 export type Prev = '' | 'UP' | 'DOWN';
 export type TPrev = '' | 'LEFT' | 'TOP' | 'RIGHT' | 'BOTTOM';
 
