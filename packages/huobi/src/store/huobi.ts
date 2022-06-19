@@ -244,21 +244,6 @@ class HuobiStore {
   }
 
   main() {
-    // timer(5000, 5000)
-    //   .pipe(
-    //     take(1),
-    //     concatMap(() =>
-    //       this.autoSwapCrossOrder({
-    //         contract_code: 'BTC-USDT',
-    //         volume: 1,
-    //         direction: 'buy',
-    //         offset: 'open',
-    //         lever_rate: 200,
-    //       }),
-    //     ),
-    //   )
-    //   .subscribe((x) => console.log(x, 'maker 单'));
-
     this.fetchSwapContractInfo({})
       .pipe(
         take(this.maxSymbolLimit),
@@ -285,7 +270,7 @@ class HuobiStore {
               const [a, b] = order.orderInfo.split('');
               const offset = orderEnum[a as OffsetEx];
               const direction = orderEnum[b as DirectionEx];
-              const leverRate = this.getMapValue('BTC-USDT').leverRate;
+              const leverRate = this.getMapValue(order.symbol).leverRate;
 
               let qty: number = 0; // 数量
 
@@ -325,7 +310,7 @@ class HuobiStore {
 
   autoSwapCrossOrder(order: AutoSwapCrossOrderInterface): Observable<any> {
     // bids: 买盘, asks: 卖盘
-    const { bids, asks } = this.getMapValue('BTC-USDT').depth;
+    const { bids, asks } = this.getMapValue(order.contract_code).depth;
 
     const price = (
       order.direction === 'buy' ? bids[0][0] : asks[0][0]
@@ -342,13 +327,13 @@ class HuobiStore {
       filter((x) => !!x),
       concatMap((x) =>
         this.fetchSwapCrossOrderInfo({
-          contract_code: 'SHIB-USDT',
+          contract_code: order.contract_code,
           order_id: x.order_id_str,
         }).pipe(
           filter(([orderInfo]) => orderInfo.status !== 6),
           concatMap(() =>
             this.fetchSwapCrossCancel({
-              contract_code: 'SHIB-USDT',
+              contract_code: order.contract_code,
               order_id: x.order_id_str,
             }),
           ),

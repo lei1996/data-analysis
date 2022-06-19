@@ -64,7 +64,7 @@ class MainStore {
             .minus(new Big(1).times(timeHuobi[interval]).times(1000))
             .toString();
 
-          for (let i = 0; i < 10; i++) {
+          for (let i = 0; i < 5; i++) {
             const startTime = new Big(rightTimestamp)
               .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
               .toString();
@@ -129,6 +129,7 @@ class MainStore {
         concatMap((items) => {
           const obj = {
             sum: new Big(0),
+            sumLists: [] as string[],
             prev: new Big(0),
           };
 
@@ -147,14 +148,15 @@ class MainStore {
                   ? new Big(close).minus(obj.prev)
                   : new Big(obj.prev).minus(close),
               );
+              obj.sumLists.push(obj.sum.toString());
             }
           }
 
-          return of({ sum: obj.sum, info: dir });
+          return of({ sum: obj.sum, sumLists: obj.sumLists, info: dir });
         }),
       )
-      .subscribe(({ info, sum }) =>
-        console.log(info, sum.toString(), 'x -> 分组数据'),
+      .subscribe(({ info, sum, sumLists }) =>
+        console.log(info, sum.toString(), sumLists, 'x -> 分组数据'),
       );
   }
 
