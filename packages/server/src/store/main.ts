@@ -96,7 +96,7 @@ class MainStore {
         }),
         concatMap((item) =>
           from(item).pipe(
-            delay(20),
+            delay(5),
             tap((x) => (kline = x)),
             makeSuObservable(14),
             concatMap((info: string) =>

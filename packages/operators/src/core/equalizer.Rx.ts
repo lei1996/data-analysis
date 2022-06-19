@@ -32,7 +32,7 @@ export const equalizerRxOperator = (interval: number) => {
               result.beforeSum = new Big(result.beforeSum).plus(lastDiff);
 
               // interval 根收益均值小于最新收益总值 表明当前策略执行不乐观，需要锁定实盘开仓
-              if (num.lt(num.abs().div(10))) {
+              if (num.gt(0)) {
                 result.isLock = true;
               } else {
                 result.isLock = false;
@@ -51,7 +51,7 @@ export const equalizerRxOperator = (interval: number) => {
         });
 
         return () => {
-          // console.log('equalizerRxOperator 清空所有operator状态');
+          // console.log('equalizerRx 清空所有operator状态');
           // Clean up all state.
           openSubscription.unsubscribe();
           indicator = null!;

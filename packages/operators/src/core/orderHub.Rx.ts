@@ -6,7 +6,7 @@ import {
 import { OrderElementInterface } from '@data-analysis/types/order.type';
 import { WareHouseRxInterface } from '../types/wareHouse.Rx';
 
-export const orderHubRxOperator = (queueLength: number) => {
+export const orderHubRxOperator = () => {
   return (observable: Observable<OrderElementInterface>) =>
     new Observable<WareHouseRxInterface>(
       (subscriber: Subscriber<WareHouseRxInterface>) => {
@@ -41,7 +41,7 @@ export const orderHubRxOperator = (queueLength: number) => {
         });
 
         return () => {
-          // console.log('wareHouseRx 清空所有operator状态');
+          // console.log('orderHubRx 清空所有operator状态');
           // Clean up all state.
           subscription.unsubscribe();
           order = null!;
