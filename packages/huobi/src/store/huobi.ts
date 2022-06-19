@@ -424,7 +424,7 @@ class HuobiStore {
     return this.fetchHistoryKline({
       contract_code,
       period,
-      size: size * mergeLength + (offset + 1),
+      size: size * mergeLength + (offset - 1),
     }).pipe(concatWith(this.wsKlines$(contract_code)));
   }
 

@@ -239,6 +239,7 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
       const buyAutoBestSubscription = autoBestShare$
         .pipe(autoBestOperator(buyOperator, 3))
         .subscribe(([equalizerResult, best]) => {
+          console.log('buyAutoBestSubscription ->', best);
           buy.best = best;
           buy.isLock = equalizerResult.isLock;
         });
@@ -246,6 +247,7 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
       const sellAutoBestSubscription = autoBestShare$
         .pipe(autoBestOperator(sellOperator, 3))
         .subscribe(([equalizerResult, best]) => {
+          console.log('sellAutoBestSubscription ->', best);
           sell.best = best;
           sell.isLock = equalizerResult.isLock;
         });
