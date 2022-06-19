@@ -11,6 +11,8 @@ import {
   pairwise,
   delay,
   Observable,
+  timer,
+  take,
 } from '@data-analysis/core';
 import {
   HuobiHttpClient,
@@ -217,10 +219,7 @@ interface AutoSwapCrossOrderInterface {
 
 class HuobiStore {
   private huobiServices: HuobiHttpClient;
-  // private websocketKLineClient: WebsocketKLineClient;
-  // private websocketNotificationClient: WebsocketNotificationClient;
-  private baseCoin: BaseCoin = new BaseCoin('BTC-USDT');
-  private baseCoin1: BaseCoin = new BaseCoin('ETH-USDT');
+  private map: Map<string, BaseCoin> = new Map<string, BaseCoin>();
   private accountInfo: SwapCrossAccountInfoResultInterface | {} = {};
   private maxOpenLimit: number = 1; // 最大开仓数
 
@@ -230,31 +229,17 @@ class HuobiStore {
       accessKey: server.huobi.profileConfig.accessKey,
       secretKey: server.huobi.profileConfig.secretKey,
     });
-    // 初始化 Websocket KLine Client
-    // this.websocketKLineClient = new WebsocketKLineClient(server.huobi.wsUrl);
-    // this.websocketNotificationClient = new WebsocketNotificationClient(
-    //   'api.hbdm.vn',
-    //   '/linear-swap-notification',
-    //   server.huobi.profileConfig.accessKey,
-    //   server.huobi.profileConfig.secretKey,
-    // );
 
     // this.onLoad();
     this.main();
-    this.baseCoin.lastKLine
-      .pipe(
+    this.map.set('BTC-USDT', new BaseCoin('BTC-USDT'));
+    this.getMapValue('BTC-USDT')
+      .lastKLine.pipe(
         pairwise(),
         filter((items) => items[0].id !== items[1].id),
         map((x) => x[0]),
       )
       .subscribe((x) => console.log(x, 'k线数据'));
-    this.baseCoin1.lastKLine
-      .pipe(
-        pairwise(),
-        filter((items) => items[0].id !== items[1].id),
-        map((x) => x[0]),
-      )
-      .subscribe((x) => console.log(x, 'k线数据1'));
   }
 
   onLoad() {
@@ -266,13 +251,20 @@ class HuobiStore {
   }
 
   main() {
-    this.autoSwapCrossOrder({
-      contract_code: 'SHIB-USDT',
-      volume: 1,
-      direction: 'buy',
-      offset: 'open',
-      lever_rate: 20,
-    }).subscribe((x) => console.log(x, 'maker 单'));
+    timer(5000, 5000)
+      .pipe(
+        take(1),
+        concatMap(() =>
+          this.autoSwapCrossOrder({
+            contract_code: 'BTC-USDT',
+            volume: 1,
+            direction: 'buy',
+            offset: 'open',
+            lever_rate: 200,
+          }),
+        ),
+      )
+      .subscribe((x) => console.log(x, 'maker 单'));
     // this.fetchSwapContractInfo({})
     //   .pipe(
     //     take(this.maxOpenLimit),
@@ -349,13 +341,22 @@ class HuobiStore {
   }
 
   autoSwapCrossOrder(order: AutoSwapCrossOrderInterface): Observable<any> {
+    // bids: 买盘, asks: 卖盘
+    const { bids, asks } = this.getMapValue('BTC-USDT').depth;
+
+    const price = (
+      order.direction === 'buy' ? bids[0][0] : asks[0][0]
+    ).toString();
+
+    console.log(price, 'meker 挂单价格 ->');
+
     return this.fetchSwapCrossOrder({
       ...order,
       order_price_type: 'post_only',
-      price: '0.00000400',
+      price: price,
     }).pipe(
       delay(10 * 1000),
-      filter(x => !!x),
+      filter((x) => !!x),
       concatMap((x) =>
         this.fetchSwapCrossOrderInfo({
           contract_code: 'SHIB-USDT',
@@ -438,6 +439,15 @@ class HuobiStore {
    */
   fetchSwapCrossCancel(info: SwapCrossCancelInterface) {
     return this.huobiServices.fetchSwapCrossCancel(info);
+  }
+
+  /**
+   * 获取map key里面的value值
+   * @param date
+   * @returns
+   */
+  getMapValue(symbol: string) {
+    return this.map.get(symbol) ?? new BaseCoin('BTC-USDT');
   }
 }
 
