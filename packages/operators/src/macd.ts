@@ -20,6 +20,7 @@ import {
   tap,
   filter,
   delay,
+  min,
 } from '@data-analysis/core';
 import { divideEquallyRx } from '@data-analysis/core/src/divideEqually';
 import { Business, Prev } from './base';
@@ -121,12 +122,12 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
               _price: (currKLine as KLineBaseInterface).close,
             }),
           ),
-          orderHubRxOperator(3),
-          equalizerRxOperator(3),
+          orderHubRxOperator(),
+          equalizerRxOperator(7),
         )
         .subscribe((x) => {
           console.log(
-            `beforeSum: ${x.beforeSum.toString()}, aftersum: ${x.aftersum.toString()}, isLock: ${
+            `buy -> beforeSum: ${x.beforeSum.toString()}, aftersum: ${x.aftersum.toString()}, isLock: ${
               x.isLock
             }`,
           );
@@ -140,12 +141,12 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
               _price: (currKLine as KLineBaseInterface).close,
             }),
           ),
-          orderHubRxOperator(3),
-          equalizerRxOperator(3),
+          orderHubRxOperator(),
+          equalizerRxOperator(7),
         )
         .subscribe((x) => {
           console.log(
-            `beforeSum: ${x.beforeSum.toString()}, aftersum: ${x.aftersum.toString()}, isLock: ${
+            `sell -> beforeSum: ${x.beforeSum.toString()}, aftersum: ${x.aftersum.toString()}, isLock: ${
               x.isLock
             }`,
           );
@@ -157,11 +158,11 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
           if (!buy.isOpen && !buy.isLock && item.includes('开')) {
             buy.isOpen = true;
             console.log('多头', item);
-            subscriber.next(item);
+            subscriber.next('开空');
           } else if (buy.isOpen && item.includes('平')) {
             buy.isOpen = false;
             console.log('多头', item);
-            subscriber.next(item);
+            subscriber.next('平多');
           }
         },
         error(err) {
@@ -177,11 +178,11 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
           if (!sell.isOpen && !sell.isLock && item.includes('开')) {
             sell.isOpen = true;
             console.log('空头', item);
-            subscriber.next(item);
+            subscriber.next('开多');
           } else if (sell.isOpen && item.includes('平')) {
             sell.isOpen = false;
             console.log('空头', item);
-            subscriber.next(item);
+            subscriber.next('平空');
           }
         },
         error(err) {
@@ -237,7 +238,7 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
       );
 
       const buyAutoBestSubscription = autoBestShare$
-        .pipe(autoBestOperator(buyOperator, 3))
+        .pipe(autoBestOperator(buyOperator, 7))
         .subscribe(([equalizerResult, best]) => {
           // console.log('buyAutoBestSubscription ->', best);
           buy.best = best;
@@ -245,7 +246,7 @@ export const makeSuObservable = (interval: number, maxLength: number = 300) => {
         });
 
       const sellAutoBestSubscription = autoBestShare$
-        .pipe(autoBestOperator(sellOperator, 3))
+        .pipe(autoBestOperator(sellOperator, 7))
         .subscribe(([equalizerResult, best]) => {
           // console.log('sellAutoBestSubscription ->', best);
           sell.best = best;
@@ -293,7 +294,7 @@ const autoBestOperator = (operator: OperatorType, interval: number) => {
                         _price: kline.close,
                       }),
                     ),
-                    orderHubRxOperator(interval),
+                    orderHubRxOperator(),
                     equalizerRxOperator(interval),
                     defaultIfEmpty({
                       beforeSum: new Big(0),
@@ -306,8 +307,8 @@ const autoBestOperator = (operator: OperatorType, interval: number) => {
                   return zip(last$, of(best));
                 }),
                 // 最好的策略
-                max<[EqualizerRxInterface, number[]]>((a, b) =>
-                  new Big(a[0].aftersum).lt(b[0].aftersum) ? -1 : 1,
+                min<[EqualizerRxInterface, number[]]>((a, b) =>
+                  new Big(a[0].beforeSum).lt(b[0].beforeSum) ? -1 : 1,
                 ),
               );
             }),

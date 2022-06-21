@@ -17,6 +17,7 @@ import {
 import axios from '@data-analysis/utils/axios';
 import { spliceURL } from '@data-analysis/utils/spliceURL';
 import { timeHuobi } from '@data-analysis/utils/time';
+import { makeCuObservable } from '@data-analysis/operators';
 
 interface KLineParamsInterface {
   symbol: string; // 交易对
@@ -64,7 +65,7 @@ class MainStore {
             .minus(new Big(1).times(timeHuobi[interval]).times(1000))
             .toString();
 
-          for (let i = 0; i < 5; i++) {
+          for (let i = 0; i < 100; i++) {
             const startTime = new Big(rightTimestamp)
               .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
               .toString();
@@ -97,8 +98,16 @@ class MainStore {
         concatMap((item) =>
           from(item).pipe(
             delay(5),
+            map(({ id, open, close, high, low, vol }: any) => ({
+              id: id * 1000,
+              open,
+              close,
+              high,
+              low,
+              volume: vol,
+            })),
             tap((x) => (kline = x)),
-            makeSuObservable(14),
+            makeCuObservable(7),
             concatMap((info: string) =>
               of({
                 id: kline.id,
