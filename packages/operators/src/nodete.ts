@@ -82,6 +82,12 @@ export const makeCuObservable = (interval: number = 5) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
       let count: number = 0; // 推入的 k线数量
       let prev = '';
+      const buy = {
+        isOpen: false,
+      };
+      const sell = {
+        isOpen: false,
+      };
       const result = {
         prevOpen: new Big(0),
         sum: new Big(0),
@@ -109,36 +115,92 @@ export const makeCuObservable = (interval: number = 5) => {
         },
       });
 
-      main$
+      // main$
+      //   .pipe(
+      //     mergeKLine(interval),
+      //     concatMap(([x1, x2]) => {
+      //       if (prev === '') {
+      //         prev = x1.dir;
+      //       } else if (prev !== x1.dir) {
+      //         if (x1.dir === 'up') {
+      //           if (!result.prevOpen.eq(0)) {
+      //             result.sum = result.sum.plus(
+      //               new Big(x2.close).minus(result.prevOpen),
+      //             );
+      //           }
+      //           result.prevOpen = new Big(x2.close);
+      //         } else {
+      //           if (!result.prevOpen.eq(0)) {
+      //             result.sum = result.sum.plus(result.prevOpen.minus(x2.close));
+      //           }
+      //           result.prevOpen = new Big(x2.close);
+      //         }
+      //       }
+
+      //       return of(result.sum.toString());
+      //     }),
+      //   )
+      //   .subscribe((x) => console.log(x, '5 result ->'));
+
+      const mainSubscription = main$
         .pipe(
           mergeKLine(interval),
           concatMap(([x1, x2]) => {
+            let info = [];
+
             if (prev === '') {
               prev = x1.dir;
             } else if (prev !== x1.dir) {
               if (x1.dir === 'up') {
                 if (!result.prevOpen.eq(0)) {
-                  result.sum = result.sum.plus(
-                    new Big(x2.close).minus(result.prevOpen),
-                  );
+                  if (sell.isOpen) {
+                    info.push('平多');
+                    sell.isOpen = false;
+                  }
+                  if (!buy.isOpen) {
+                    info.push('开多');
+                    buy.isOpen = true;
+                  }
                 }
                 result.prevOpen = new Big(x2.close);
               } else {
                 if (!result.prevOpen.eq(0)) {
-                  result.sum = result.sum.plus(result.prevOpen.minus(x2.close));
+                  if (buy.isOpen) {
+                    info.push('平空');
+                    buy.isOpen = false;
+                  }
+                  if (!sell.isOpen) {
+                    info.push('开空');
+                    sell.isOpen = true;
+                  }
                 }
                 result.prevOpen = new Big(x2.close);
               }
+              prev = x1.dir;
             }
 
-            return of(result.sum.toString());
+            return from(info);
           }),
         )
-        .subscribe((x) => console.log(x, '5 result ->'));
+        .subscribe({
+          next(info) {
+            // console.log(info, 'info');
+
+            subscriber.next(info);
+          },
+          error(err) {
+            // We need to make sure we're propagating our errors through.
+            subscriber.error(err);
+          },
+          complete() {
+            subscriber.complete();
+          },
+        });
 
       return () => {
         console.log('makeCuObservable 清空状态');
         Subscription1.unsubscribe();
+        mainSubscription.unsubscribe();
 
         // Clean up all state.
         currKLine = null!;
