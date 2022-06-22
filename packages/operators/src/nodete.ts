@@ -1,8 +1,4 @@
 import {
-  ADX,
-  EMA,
-  RSI,
-  MACD,
   share,
   Observable,
   Subscriber,
@@ -23,9 +19,6 @@ import {
   pairwise,
   SMA,
 } from '@data-analysis/core';
-import { divideEquallyRx } from '@data-analysis/core/src/divideEqually';
-import { Business } from './base';
-import { equalizerRxOperator, orderHubRxOperator } from './core';
 
 interface KLineBaseInterface {
   id: number; // 时间戳
@@ -83,7 +76,6 @@ export const makeCuObservable = (interval: number = 5) => {
     new Observable<string>((subscriber: Subscriber<string>) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
       let indicator: SMA = new SMA(interval);
-      let count: number = 0; // 推入的 k线数量
       const buy = {
         isOpen: false,
       };
@@ -101,29 +93,9 @@ export const makeCuObservable = (interval: number = 5) => {
         sum: new Big(0),
       };
 
-      // 判断是否超过了初始化的参数
-      const isComplete = (): boolean => {
-        return count > interval;
-      };
-
       const main$ = observable.pipe(share());
 
       const share$ = main$.pipe(mergeKLine(interval), share());
-
-      const Subscription1 = main$.subscribe({
-        next(item) {
-          const { high, low, close, volume } = item;
-          count++;
-          currKLine = item;
-        },
-        error(err) {
-          // We need to make sure we're propagating our errors through.
-          subscriber.error(err);
-        },
-        complete() {
-          subscriber.complete();
-        },
-      });
 
       const source$ = share$.pipe(
         concatMap(([x1, x2]) => {
@@ -242,7 +214,6 @@ export const makeCuObservable = (interval: number = 5) => {
 
       return () => {
         console.log('makeCuObservable 清空状态');
-        Subscription1.unsubscribe();
         equalizerSubscription.unsubscribe();
         buy$.unsubscribe();
         sell$.unsubscribe();
