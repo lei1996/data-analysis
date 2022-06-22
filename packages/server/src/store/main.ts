@@ -65,7 +65,7 @@ class MainStore {
             .minus(new Big(1).times(timeHuobi[interval]).times(1000))
             .toString();
 
-          for (let i = 0; i < 50; i++) {
+          for (let i = 0; i < 40; i++) {
             const startTime = new Big(rightTimestamp)
               .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
               .toString();
@@ -107,7 +107,7 @@ class MainStore {
               volume: vol,
             })),
             tap((x) => (kline = x)),
-            makeCuObservable(7),
+            makeCuObservable(5),
             concatMap((info: string) =>
               of({
                 id: kline.id,

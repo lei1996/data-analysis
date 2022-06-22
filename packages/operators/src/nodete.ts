@@ -84,7 +84,6 @@ export const makeCuObservable = (interval: number = 5) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
       let indicator: SMA = new SMA(interval);
       let count: number = 0; // 推入的 k线数量
-      let prev = '';
       const buy = {
         isOpen: false,
       };
@@ -92,6 +91,12 @@ export const makeCuObservable = (interval: number = 5) => {
         isOpen: false,
       };
       const result = {
+        prev: '',
+        prevOpen: new Big(0),
+        sum: new Big(0),
+      };
+      const equalizerResult = {
+        prev: '',
         prevOpen: new Big(0),
         sum: new Big(0),
       };
@@ -102,6 +107,8 @@ export const makeCuObservable = (interval: number = 5) => {
       };
 
       const main$ = observable.pipe(share());
+
+      const share$ = main$.pipe(mergeKLine(interval), share());
 
       const Subscription1 = main$.subscribe({
         next(item) {
@@ -118,85 +125,55 @@ export const makeCuObservable = (interval: number = 5) => {
         },
       });
 
-      const equalizerSubscription = main$
-        .pipe(
-          mergeKLine(interval),
-          concatMap(([x1, x2]) => {
-            if (prev === '') {
-              prev = x1.dir;
-            } else if (prev !== x1.dir) {
-              if (x1.dir === 'up') {
-                if (!result.prevOpen.eq(0)) {
-                  result.sum = result.sum.plus(
-                    new Big(x2.close).minus(result.prevOpen),
-                  );
+      const source$ = share$.pipe(
+        concatMap(([x1, x2]) => {
+          let info = [];
+
+          if (result.prev === '') {
+            result.prev = x1.dir;
+          } else if (result.prev !== x1.dir) {
+            if (x1.dir === 'up') {
+              if (!result.prevOpen.eq(0) && indicator.isStable) {
+                const num = indicator.getResult();
+
+                if (num.gt(0)) {
+                  info.push('平空', '开空');
+                } else {
+                  info.push('平多', '开多');
                 }
-                result.prevOpen = new Big(x2.close);
-              } else {
-                if (!result.prevOpen.eq(0)) {
-                  result.sum = result.sum.plus(result.prevOpen.minus(x2.close));
-                }
-                result.prevOpen = new Big(x2.close);
               }
-              prev = x1.dir;
-            }
+              result.prevOpen = new Big(x2.close);
+            } else {
+              if (!result.prevOpen.eq(0) && indicator.isStable) {
+                const num = indicator.getResult();
 
-            return of(result.sum.toString());
-          }),
-          pairwise(),
-          filter(([x1, x2]) => x1 !== x2),
-          map(([_, x2]) => x2),
-        )
-        .subscribe((x) => {
-          console.log(x, '5 result ->');
-          indicator.update(x);
-        });
-
-      const mainSubscription = main$
-        .pipe(
-          mergeKLine(interval),
-          concatMap(([x1, x2]) => {
-            let info = [];
-
-            if (prev === '') {
-              prev = x1.dir;
-            } else if (prev !== x1.dir) {
-              if (x1.dir === 'up') {
-                if (!result.prevOpen.eq(0)) {
-                  if (sell.isOpen) {
-                    info.push('平多');
-                    sell.isOpen = false;
-                  }
-                  if (!buy.isOpen) {
-                    info.push('开多');
-                    buy.isOpen = true;
-                  }
+                if (num.gt(0)) {
+                  info.push('平多', '开多');
+                } else {
+                  info.push('平空', '开空');
                 }
-                result.prevOpen = new Big(x2.close);
-              } else {
-                if (!result.prevOpen.eq(0)) {
-                  if (buy.isOpen) {
-                    info.push('平空');
-                    buy.isOpen = false;
-                  }
-                  if (!sell.isOpen) {
-                    info.push('开空');
-                    sell.isOpen = true;
-                  }
-                }
-                result.prevOpen = new Big(x2.close);
               }
-              prev = x1.dir;
+              result.prevOpen = new Big(x2.close);
             }
+            result.prev = x1.dir;
+          }
 
-            return from(info);
-          }),
-        )
+          return from(info);
+        }),
+        share(),
+      );
+
+      const buy$ = source$
+        .pipe(filter((info) => info === '开多' || info === '平空'))
         .subscribe({
           next(info) {
-            // console.log(info, 'info');
-
-            subscriber.next(info);
+            if (!buy.isOpen && info.includes('开')) {
+              subscriber.next(info);
+              buy.isOpen = true;
+            } else if (buy.isOpen && info.includes('平')) {
+              subscriber.next(info);
+              buy.isOpen = false;
+            }
           },
           error(err) {
             // We need to make sure we're propagating our errors through.
@@ -207,11 +184,68 @@ export const makeCuObservable = (interval: number = 5) => {
           },
         });
 
+      const sell$ = source$
+        .pipe(filter((info) => info === '开空' || info === '平多'))
+        .subscribe({
+          next(info) {
+            if (!sell.isOpen && info.includes('开')) {
+              subscriber.next(info);
+              sell.isOpen = true;
+            } else if (sell.isOpen && info.includes('平')) {
+              subscriber.next(info);
+              sell.isOpen = false;
+            }
+          },
+          error(err) {
+            // We need to make sure we're propagating our errors through.
+            subscriber.error(err);
+          },
+          complete() {
+            subscriber.complete();
+          },
+        });
+
+      const equalizerSubscription = share$
+        .pipe(
+          concatMap(([x1, x2]) => {
+            if (equalizerResult.prev === '') {
+              equalizerResult.prev = x1.dir;
+            } else if (equalizerResult.prev !== x1.dir) {
+              if (x1.dir === 'up') {
+                if (!equalizerResult.prevOpen.eq(0)) {
+                  equalizerResult.sum = equalizerResult.sum.plus(
+                    equalizerResult.prevOpen.minus(x2.close),
+                  );
+                }
+                equalizerResult.prevOpen = new Big(x2.close);
+              } else {
+                if (!equalizerResult.prevOpen.eq(0)) {
+                  equalizerResult.sum = equalizerResult.sum.plus(
+                    new Big(x2.close).minus(equalizerResult.prevOpen),
+                  );
+                }
+                equalizerResult.prevOpen = new Big(x2.close);
+              }
+              equalizerResult.prev = x1.dir;
+            }
+
+            return of(equalizerResult.sum.toString());
+          }),
+          pairwise(),
+          filter(([x1, x2]) => x1 !== x2),
+          map(([_, x2]) => x2),
+        )
+        .subscribe((x) => {
+          console.log(x, '5 result ->');
+          indicator.update(x);
+        });
+
       return () => {
         console.log('makeCuObservable 清空状态');
         Subscription1.unsubscribe();
         equalizerSubscription.unsubscribe();
-        mainSubscription.unsubscribe();
+        buy$.unsubscribe();
+        sell$.unsubscribe();
 
         // Clean up all state.
         currKLine = null!;
