@@ -36,7 +36,7 @@ import {
   Offset,
 } from '@data-analysis/crypto-huobi/src/types';
 
-import { makeSuObservable } from '@data-analysis/operators/src/macd';
+import { makeCuObservable } from '@data-analysis/operators/src/nodete';
 
 const orderEnum = {
   空: 'buy',
@@ -127,7 +127,8 @@ class BaseCoin {
               ...this.openOrders,
               [arr.direction]: new Big(arr.volume),
             };
-            this.leverRate = arr.leverRate;
+            
+            this.leverRate = arr.lever_rate;
           }
         }
 
@@ -255,10 +256,10 @@ class HuobiStore {
           return this.fetchHistoryKlines$(
             x.contract_code,
             '15min',
-            300,
-            14,
+            5,
+            1,
           ).pipe(
-            makeSuObservable(14),
+            makeCuObservable(5),
             map((orderInfo) => ({
               symbol: x.contract_code,
               quantityPrecision:
