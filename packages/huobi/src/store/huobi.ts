@@ -121,6 +121,8 @@ class BaseCoin {
         if (data.topic === 'positions_cross') {
           const arrs = data.data;
 
+          console.log(arrs, '持仓信息');
+
           for (const arr of arrs) {
             this.openOrders = {
               ...this.openOrders,
@@ -180,7 +182,9 @@ class BaseCoin {
         if (data.topic === 'accounts_cross') {
           // console.log(new Big(data.data[0].margin_balance).div(100).round(0).toNumber() + 1, 'usdt data.data ->');
 
-          this.openCount = new Big(data.data[0].margin_balance).div(100).round(0).toNumber() + 1 || 1;
+          this.openCount =
+            new Big(data.data[0].margin_balance).div(100).round(0).toNumber() +
+              1 || 1;
         }
       },
       error: (e) => {
@@ -296,13 +300,18 @@ class HuobiStore {
           const [a, b] = orderInfo.split('');
           const offset = orderEnum[a as OffsetEx];
           const direction = orderEnum[b as DirectionEx];
-          const leverRate = this.getMapValue(this.symbol).leverRate;
-          const { openCount } = this.getMapValue(this.symbol);
+          const map = this.getMapValue(this.symbol);
+          const leverRate = map.leverRate;
+          const openCount = map.openCount;
 
           let qty: number = 0; // 数量
 
           if (orderInfo.includes('开')) {
-            qty = openCount;
+            qty = new Big(
+              map.openOrders[orderInfo.includes('多') ? 'buy' : 'sell'],
+            ).gte(openCount)
+              ? 0
+              : openCount;
           } else if (orderInfo.includes('平')) {
             const { buy, sell } = this.getMapValue(this.symbol).openOrders;
             qty = new Big(orderInfo.includes('空') ? sell : buy).toNumber();
@@ -332,8 +341,11 @@ class HuobiStore {
   }
 
   autoSwapCrossOrder(order: AutoSwapCrossOrderInterface): Observable<any> {
+    // 实例
+    const map = this.getMapValue(order.contract_code);
+
     // bids: 买盘, asks: 卖盘
-    const { bids, asks } = this.getMapValue(order.contract_code).depth;
+    const { bids, asks } = map.depth;
 
     const price = (
       order.direction === 'buy' ? bids[0][0] : asks[0][0]
@@ -347,9 +359,12 @@ class HuobiStore {
       price: price,
     }).pipe(
       delay(5 * 1000),
-      filter((x) => !!x),
-      concatMap((x) =>
-        this.fetchSwapCrossOrderInfo({
+      concatMap((x) => {
+        if (!!!x) {
+          return this.autoSwapCrossOrder(order);
+        }
+
+        return this.fetchSwapCrossOrderInfo({
           contract_code: order.contract_code,
           order_id: x.order_id_str,
         }).pipe(
@@ -361,8 +376,8 @@ class HuobiStore {
             }),
           ),
           concatMap(() => this.autoSwapCrossOrder(order)),
-        ),
-      ),
+        );
+      }),
     );
   }
 
