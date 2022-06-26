@@ -109,9 +109,9 @@ export const makeCuObservable = (interval: number = 5) => {
                 const num = indicator.getResult();
 
                 if (num.gt(0)) {
-                  info.push('平空', '开空');
-                } else {
                   info.push('平多', '开多');
+                } else {
+                  info.push('平空', '开空');
                 }
               }
               result.prevOpen = new Big(x2.close);
@@ -120,9 +120,9 @@ export const makeCuObservable = (interval: number = 5) => {
                 const num = indicator.getResult();
 
                 if (num.gt(0)) {
-                  info.push('平多', '开多');
-                } else {
                   info.push('平空', '开空');
+                } else {
+                  info.push('平多', '开多');
                 }
               }
               result.prevOpen = new Big(x2.close);

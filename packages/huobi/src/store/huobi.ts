@@ -74,12 +74,16 @@ class BaseCoin {
     asks: [],
   };
 
+  // 开仓的数量
+  openCount: number = 1;
+
   private _kLine: Subject<KLineInterface> = new Subject<KLineInterface>();
 
   constructor(readonly symbol: string, interval: string) {
     // 初始化 Websocket KLine Client
     this.marketDepthSubscribe(symbol);
     this.positionCrossSubscribe(symbol);
+    this.accountsCrossSubscribe();
     this.kLineSubscribe(symbol, interval);
   }
 
@@ -143,6 +147,48 @@ class BaseCoin {
       complete: () => {
         console.log('持仓变化数据 连接关闭');
         this.positionCrossSubscribe(symbol);
+      },
+    });
+  }
+
+  // usdt 权益数据
+  accountsCrossSubscribe() {
+    const url = 'api.hbdm.vn';
+    const path = '/linear-swap-notification';
+    const authD = JSON.stringify(
+      authData(
+        url,
+        path,
+        server.huobi.profileConfig.accessKey,
+        server.huobi.profileConfig.secretKey,
+      ),
+    );
+
+    console.log(authD, 'authD ->');
+
+    makeWebsocketInstance(
+      `wss://${url}${path}`,
+      JSON.stringify({
+        op: 'sub',
+        topic: `accounts_cross.USDT`,
+      }),
+      authD,
+    ).subscribe({
+      next: (msg) => {
+        const data = inflateData(msg.data);
+
+        if (data.topic === 'accounts_cross') {
+          // console.log(new Big(data.data[0].margin_balance).div(100).round(0).toNumber() + 1, 'usdt data.data ->');
+
+          this.openCount = new Big(data.data[0].margin_balance).div(100).round(0).toNumber() + 1 || 1;
+        }
+      },
+      error: (e) => {
+        console.log(e, '报错信息');
+      },
+      complete: () => {
+        console.log('权益变化数据 连接关闭');
+        this.accountsCrossSubscribe();
       },
     });
   }
@@ -223,7 +269,10 @@ class HuobiStore {
   private huobiServices: HuobiHttpClient;
   private map: Map<string, BaseCoin> = new Map<string, BaseCoin>();
 
-  constructor(private readonly symbol: string, private readonly interval: kLinePeriod) {
+  constructor(
+    private readonly symbol: string,
+    private readonly interval: kLinePeriod,
+  ) {
     // 初始化 Http Client
     this.huobiServices = new HuobiHttpClient(server.huobi.apiBaseUrl, {
       accessKey: server.huobi.profileConfig.accessKey,
@@ -248,16 +297,15 @@ class HuobiStore {
           const offset = orderEnum[a as OffsetEx];
           const direction = orderEnum[b as DirectionEx];
           const leverRate = this.getMapValue(this.symbol).leverRate;
+          const { openCount } = this.getMapValue(this.symbol);
 
           let qty: number = 0; // 数量
 
           if (orderInfo.includes('开')) {
-            qty = 1;
+            qty = openCount;
           } else if (orderInfo.includes('平')) {
             const { buy, sell } = this.getMapValue(this.symbol).openOrders;
-            qty = new Big(
-              orderInfo.includes('空') ? sell : buy,
-            ).toNumber();
+            qty = new Big(orderInfo.includes('空') ? sell : buy).toNumber();
           }
 
           return of({
@@ -412,4 +460,7 @@ class HuobiStore {
   }
 }
 
-export default new HuobiStore(server.huobi.symbol, server.huobi.interval as kLinePeriod);
+export default new HuobiStore(
+  server.huobi.symbol,
+  server.huobi.interval as kLinePeriod,
+);
