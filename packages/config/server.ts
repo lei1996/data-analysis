@@ -9,6 +9,15 @@ export default {
     // ws url
     wsUrl: 'wss://api.hbdm.vn/linear-swap-ws',
 
+    // example: 'BTC-USDT'
+    symbol: env.symbol || '',
+
+    // example: '1hour'
+    interval: env.interval || '',
+
+    // 10001
+    port: env.port || '',
+
     // 秘钥
     profileConfig: {
       accessKey: env.AccessKey || '',

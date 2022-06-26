@@ -11,12 +11,8 @@ import {
   pairwise,
   delay,
   Observable,
-  timer,
-  take,
   concatWith,
   of,
-  tap,
-  mergeMap,
 } from '@data-analysis/core';
 import {
   HuobiHttpClient,
@@ -29,7 +25,6 @@ import {
   SwapCrossCancelInterface,
   MarketHistoryKlineInterface,
   SwapContractInfoInterface,
-  SwapCrossAccountInfoResultInterface,
   SwapCrossOrderInterface,
   SwapCrossOrderInfoInterface,
   Direction,
@@ -127,7 +122,7 @@ class BaseCoin {
               ...this.openOrders,
               [arr.direction]: new Big(arr.volume),
             };
-            
+
             this.leverRate = arr.lever_rate;
           }
         }
@@ -227,9 +222,8 @@ interface AutoSwapCrossOrderInterface {
 class HuobiStore {
   private huobiServices: HuobiHttpClient;
   private map: Map<string, BaseCoin> = new Map<string, BaseCoin>();
-  private maxSymbolLimit: number = 1; // 最大执行品种数
 
-  constructor() {
+  constructor(private readonly symbol: string, private readonly interval: kLinePeriod) {
     // 初始化 Http Client
     this.huobiServices = new HuobiHttpClient(server.huobi.apiBaseUrl, {
       accessKey: server.huobi.profileConfig.accessKey,
@@ -241,68 +235,48 @@ class HuobiStore {
   }
 
   onLoad() {
-    this.map.set('BTC-USDT', new BaseCoin('BTC-USDT', '15min'));
+    this.map.set(this.symbol, new BaseCoin(this.symbol, this.interval));
   }
 
   main() {
-    this.fetchSwapContractInfo({})
+    this.fetchHistoryKlines$(this.symbol, this.interval, 5, 1)
       .pipe(
-        take(this.maxSymbolLimit),
-        concatMap((x) => of(x).pipe(delay(5 * 1000))),
-        tap((x) => {
-          console.log(x, '中途debug');
-        }),
-        mergeMap((x) => {
-          return this.fetchHistoryKlines$(
-            x.contract_code,
-            '15min',
-            5,
-            1,
-          ).pipe(
-            makeCuObservable(5),
-            map((orderInfo) => ({
-              symbol: x.contract_code,
-              quantityPrecision:
-                x.price_tick.toString().split('.').pop()?.length ?? 1, // 合约价格精度
-              orderInfo: orderInfo,
-            })),
-            concatMap((order) => {
-              console.log(order, 'debug 在并发任务里面使用concatMap');
-              const [a, b] = order.orderInfo.split('');
-              const offset = orderEnum[a as OffsetEx];
-              const direction = orderEnum[b as DirectionEx];
-              const leverRate = this.getMapValue(order.symbol).leverRate;
+        makeCuObservable(5),
+        concatMap((orderInfo) => {
+          console.log(orderInfo, 'debug 在并发任务里面使用concatMap');
+          const [a, b] = orderInfo.split('');
+          const offset = orderEnum[a as OffsetEx];
+          const direction = orderEnum[b as DirectionEx];
+          const leverRate = this.getMapValue(this.symbol).leverRate;
 
-              let qty: number = 0; // 数量
+          let qty: number = 0; // 数量
 
-              if (order.orderInfo.includes('开')) {
-                qty = 1;
-              } else if (order.orderInfo.includes('平')) {
-                const { buy, sell } = this.getMapValue(order.symbol).openOrders;
-                qty = new Big(
-                  order.orderInfo.includes('空') ? sell : buy,
-                ).toNumber();
-              }
+          if (orderInfo.includes('开')) {
+            qty = 1;
+          } else if (orderInfo.includes('平')) {
+            const { buy, sell } = this.getMapValue(this.symbol).openOrders;
+            qty = new Big(
+              orderInfo.includes('空') ? sell : buy,
+            ).toNumber();
+          }
 
-              return of({
-                volume: qty,
-                symbol: order.symbol,
-                offset,
-                direction,
-                leverRate,
-              }).pipe(
-                filter(({ volume }) => volume !== 0),
-                concatMap(({ volume, symbol, offset, direction, leverRate }) =>
-                  this.autoSwapCrossOrder({
-                    contract_code: symbol,
-                    volume: volume,
-                    direction: direction,
-                    offset: offset,
-                    lever_rate: leverRate,
-                  }),
-                ),
-              );
-            }),
+          return of({
+            volume: qty,
+            symbol: this.symbol,
+            offset,
+            direction,
+            leverRate,
+          }).pipe(
+            filter(({ volume }) => volume !== 0),
+            concatMap(({ volume, symbol, offset, direction, leverRate }) =>
+              this.autoSwapCrossOrder({
+                contract_code: symbol,
+                volume: volume,
+                direction: direction,
+                offset: offset,
+                lever_rate: leverRate,
+              }),
+            ),
           );
         }),
       )
@@ -324,7 +298,7 @@ class HuobiStore {
       order_price_type: 'post_only',
       price: price,
     }).pipe(
-      delay(10 * 1000),
+      delay(5 * 1000),
       filter((x) => !!x),
       concatMap((x) =>
         this.fetchSwapCrossOrderInfo({
@@ -434,8 +408,8 @@ class HuobiStore {
    * @returns
    */
   getMapValue(symbol: string) {
-    return this.map.get(symbol) ?? new BaseCoin('BTC-USDT', '15min');
+    return this.map.get(symbol) ?? new BaseCoin(this.symbol, this.interval);
   }
 }
 
-export default new HuobiStore();
+export default new HuobiStore(server.huobi.symbol, server.huobi.interval as kLinePeriod);
