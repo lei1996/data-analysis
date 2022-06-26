@@ -13,6 +13,7 @@ import {
   Observable,
   concatWith,
   of,
+  tap,
 } from '@data-analysis/core';
 import {
   HuobiHttpClient,
@@ -34,8 +35,8 @@ import {
 import { makeCuObservable } from '@data-analysis/operators/src/nodete';
 
 const orderEnum = {
-  空: 'buy',
-  多: 'sell',
+  多: 'buy',
+  空: 'sell',
   开: 'open',
   平: 'close',
 } as const;
@@ -121,7 +122,7 @@ class BaseCoin {
         if (data.topic === 'positions_cross') {
           const arrs = data.data;
 
-          console.log(arrs, '持仓信息');
+          // console.log(arrs, '持仓信息');
 
           for (const arr of arrs) {
             this.openOrders = {
@@ -147,7 +148,7 @@ class BaseCoin {
         console.log(e, '报错信息');
       },
       complete: () => {
-        console.log('持仓变化数据 连接关闭');
+        // console.log('持仓变化数据 连接关闭');
         this.positionCrossSubscribe(symbol);
       },
     });
@@ -191,7 +192,7 @@ class BaseCoin {
         console.log(e, '报错信息');
       },
       complete: () => {
-        console.log('权益变化数据 连接关闭');
+        // console.log('权益变化数据 连接关闭');
         this.accountsCrossSubscribe();
       },
     });
@@ -225,7 +226,7 @@ class BaseCoin {
         console.log(e, '报错信息');
       },
       complete: () => {
-        console.log('k线数据 连接关闭');
+        // console.log('k线数据 连接关闭');
         this.kLineSubscribe(symbol, interval);
       },
     });
@@ -254,7 +255,7 @@ class BaseCoin {
         console.log(e, '报错信息');
       },
       complete: () => {
-        console.log('深度数据 连接关闭');
+        // console.log('深度数据 连接关闭');
         this.marketDepthSubscribe(symbol);
       },
     });
@@ -292,8 +293,9 @@ class HuobiStore {
   }
 
   main() {
-    this.fetchHistoryKlines$(this.symbol, this.interval, 5, 1)
+    this.fetchHistoryKlines$(this.symbol, this.interval, 25, 1)
       .pipe(
+        tap(x => console.log(x, this.symbol)),
         makeCuObservable(5),
         concatMap((orderInfo) => {
           console.log(orderInfo, 'debug 在并发任务里面使用concatMap');
@@ -303,6 +305,7 @@ class HuobiStore {
           const map = this.getMapValue(this.symbol);
           const leverRate = map.leverRate;
           const openCount = map.openCount;
+          const { buy, sell } = map.openOrders;
 
           let qty: number = 0; // 数量
 
@@ -312,9 +315,12 @@ class HuobiStore {
             ).gte(openCount)
               ? 0
               : openCount;
+
+            console.log(qty, orderInfo, buy.toString(), sell.toString(), '开仓数量 ->');
           } else if (orderInfo.includes('平')) {
-            const { buy, sell } = this.getMapValue(this.symbol).openOrders;
-            qty = new Big(orderInfo.includes('空') ? sell : buy).toNumber();
+            qty = new Big(orderInfo.includes('空') ? buy : sell).toNumber();
+
+            console.log(qty, orderInfo, buy.toString(), sell.toString(), '开仓数量 ->');
           }
 
           return of({
