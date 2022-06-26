@@ -22,7 +22,7 @@ import useWebSocket, { ReadyState } from 'react-use-websocket';
 
 import { css } from 'linaria';
 
-import { makeSuObservable } from '@data-analysis/operators';
+import { makeCuObservable, makeSuObservable } from '@data-analysis/operators';
 import { timeHuobi } from '@data-analysis/utils';
 
 import { blobInflate } from '../utils/blobInflate';
@@ -329,7 +329,7 @@ function WebSocketDemo() {
     ).pipe(
       delay(20),
       tap((x) => (kline = x)),
-      makeSuObservable(14),
+      makeCuObservable(5),
       concatMap((info: string) =>
         of({
           id: kline.id,

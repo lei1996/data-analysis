@@ -280,7 +280,7 @@ class HuobiStore {
               } else if (order.orderInfo.includes('平')) {
                 const { buy, sell } = this.getMapValue(order.symbol).openOrders;
                 qty = new Big(
-                  order.orderInfo.includes('空') ? buy : sell,
+                  order.orderInfo.includes('空') ? sell : buy,
                 ).toNumber();
               }
 
