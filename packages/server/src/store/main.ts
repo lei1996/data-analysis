@@ -55,7 +55,8 @@ class MainStore {
     this.fetchKLine({
       symbol,
       interval,
-      limit,
+      startTime: '1638255600',
+      endTime: '1638259200',
     })
       .pipe(
         concatMap((item) => {
@@ -65,7 +66,7 @@ class MainStore {
             .minus(new Big(1).times(timeHuobi[interval]).times(1000))
             .toString();
 
-          for (let i = 0; i < 500; i++) {
+          for (let i = 0; i < 1500; i++) {
             const startTime = new Big(rightTimestamp)
               .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
               .toString();
@@ -140,6 +141,7 @@ class MainStore {
             sum: new Big(0),
             sumLists: [] as string[],
             prev: new Big(0),
+            isOpen: false
           };
 
           let dir = '';
@@ -147,9 +149,10 @@ class MainStore {
           for (const item of items) {
             const { info, close } = item;
 
-            if (info.includes('开')) {
+            if (!obj.isOpen && info.includes('开')) {
               obj.prev = new Big(close);
-            } else if (info.includes('平')) {
+              obj.isOpen = true;
+            } else if (obj.isOpen && info.includes('平')) {
               dir = info.includes('空') ? 'buy' : 'sell';
 
               obj.sum = obj.sum.plus(
@@ -158,6 +161,8 @@ class MainStore {
                   : new Big(obj.prev).minus(close),
               );
               obj.sumLists.push(obj.sum.toString());
+
+              obj.isOpen = false;
             }
           }
 
@@ -165,14 +170,14 @@ class MainStore {
         }),
       )
       .subscribe(({ info, sum, sumLists }) =>
-        console.log(info, sum.toString(), sumLists, 'x -> 分组数据'),
+        console.log(info, sum.toString(), JSON.stringify(sumLists), 'x -> 分组数据'),
       );
   }
 
   fetchKLine(kline: KLineParamsInterface): Observable<KLineInterface[]> {
     return defer(() =>
       axios
-        .get(`https://suweb.linairx.top/api/kline/huobi${spliceURL(kline)}`)
+        .get(`https://vsweb.linairx.top/api/kline/huobi${spliceURL(kline)}`)
         .then((x) => x.data),
     );
   }

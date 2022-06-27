@@ -146,6 +146,7 @@ class BaseCoin {
       },
       error: (e) => {
         console.log(e, '报错信息');
+        this.positionCrossSubscribe(symbol);
       },
       complete: () => {
         // console.log('持仓变化数据 连接关闭');
@@ -190,6 +191,7 @@ class BaseCoin {
       },
       error: (e) => {
         console.log(e, '报错信息');
+        this.accountsCrossSubscribe();
       },
       complete: () => {
         // console.log('权益变化数据 连接关闭');
@@ -224,6 +226,7 @@ class BaseCoin {
       },
       error: (e) => {
         console.log(e, '报错信息');
+        this.kLineSubscribe(symbol, interval);
       },
       complete: () => {
         // console.log('k线数据 连接关闭');
@@ -253,6 +256,7 @@ class BaseCoin {
       },
       error: (e) => {
         console.log(e, '报错信息');
+        this.marketDepthSubscribe(symbol);
       },
       complete: () => {
         // console.log('深度数据 连接关闭');
@@ -357,7 +361,7 @@ class HuobiStore {
       order.direction === 'buy' ? bids[0][0] : asks[0][0]
     ).toString();
 
-    console.log(price, 'meker 挂单价格 ->');
+    console.log(price, order, 'meker 挂单价格 ->');
 
     return this.fetchSwapCrossOrder({
       ...order,
@@ -365,10 +369,11 @@ class HuobiStore {
       price: price,
     }).pipe(
       delay(5 * 1000),
+      filter(x => !!x),
       concatMap((x) => {
-        if (!!!x) {
-          return this.autoSwapCrossOrder(order);
-        }
+        // if (!!!x) {
+        //   return this.autoSwapCrossOrder(order);
+        // }
 
         return this.fetchSwapCrossOrderInfo({
           contract_code: order.contract_code,

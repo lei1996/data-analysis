@@ -31,7 +31,7 @@ class HuobiStore {
   // 当前交易对的配置信息
   currTard: KLineParamsInterface = {
     symbol: 'BTC-USDT',
-    interval: '15min',
+    interval: '1min',
     limit: '300'
   };
 

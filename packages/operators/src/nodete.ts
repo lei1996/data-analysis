@@ -16,6 +16,7 @@ import {
   min,
   scan,
   last,
+  tap,
   pairwise,
   SMA,
 } from '@data-analysis/core';
@@ -93,7 +94,12 @@ export const makeCuObservable = (interval: number = 5) => {
         sum: new Big(0),
       };
 
-      const main$ = observable.pipe(share());
+      const main$ = observable.pipe(
+        tap((x) => {
+          currKLine = x;
+        }),
+        share(),
+      );
 
       const share$ = main$.pipe(mergeKLine(interval), share());
 
@@ -105,25 +111,13 @@ export const makeCuObservable = (interval: number = 5) => {
             result.prev = x1.dir;
           } else if (result.prev !== x1.dir) {
             if (x1.dir === 'up') {
-              if (!result.prevOpen.eq(0) && indicator.isStable) {
-                const num = indicator.getResult();
-
-                if (num.gt(0)) {
-                  info.push('平多', '开多');
-                } else {
-                  info.push('平空', '开空');
-                }
+              if (!result.prevOpen.eq(0)) {
+                info.push('平多', '开多');
               }
               result.prevOpen = new Big(x2.close);
             } else {
-              if (!result.prevOpen.eq(0) && indicator.isStable) {
-                const num = indicator.getResult();
-
-                if (num.gt(0)) {
-                  info.push('平空', '开空');
-                } else {
-                  info.push('平多', '开多');
-                }
+              if (!result.prevOpen.eq(0)) {
+                info.push('平空', '开空');
               }
               result.prevOpen = new Big(x2.close);
             }
@@ -184,6 +178,7 @@ export const makeCuObservable = (interval: number = 5) => {
               equalizerResult.prev = x1.dir;
             } else if (equalizerResult.prev !== x1.dir) {
               if (x1.dir === 'up') {
+                console.log('up');
                 if (!equalizerResult.prevOpen.eq(0)) {
                   equalizerResult.sum = equalizerResult.sum.plus(
                     equalizerResult.prevOpen.minus(x2.close),
@@ -191,6 +186,7 @@ export const makeCuObservable = (interval: number = 5) => {
                 }
                 equalizerResult.prevOpen = new Big(x2.close);
               } else {
+                console.log('down');
                 if (!equalizerResult.prevOpen.eq(0)) {
                   equalizerResult.sum = equalizerResult.sum.plus(
                     new Big(x2.close).minus(equalizerResult.prevOpen),
@@ -208,7 +204,7 @@ export const makeCuObservable = (interval: number = 5) => {
           map(([_, x2]) => x2),
         )
         .subscribe((x) => {
-          console.log(x, '5 result ->');
+          console.log((currKLine as KLineBaseInterface).id, x, '5 result ->');
           indicator.update(x);
         });
 
