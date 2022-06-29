@@ -98,7 +98,7 @@ export const makeCuObservable = (interval: number = 5) => {
           currKLine = item;
 
           // 如果是最后一个k线，则更新它
-          if (kLines[kLines.length - 1].id === item.id) {
+          if (!!kLines.length && kLines[kLines.length - 1].id === item.id) {
             kLines[kLines.length - 1] = item;
           } else {
             kLines.push(item);
