@@ -40,7 +40,7 @@ class MainStore {
   // 当前交易对的配置信息
   currTard: KLineParamsInterface = {
     symbol: 'BTC-USDT',
-    interval: '1min',
+    interval: '5min',
     limit: '300',
   };
 
@@ -55,8 +55,9 @@ class MainStore {
     this.fetchKLine({
       symbol,
       interval,
-      startTime: '1638255600',
-      endTime: '1638259200',
+      // startTime: '1638255600',
+      // endTime: '1638259200',
+      limit,
     })
       .pipe(
         concatMap((item) => {
@@ -66,7 +67,7 @@ class MainStore {
             .minus(new Big(1).times(timeHuobi[interval]).times(1000))
             .toString();
 
-          for (let i = 0; i < 1500; i++) {
+          for (let i = 0; i < 25; i++) {
             const startTime = new Big(rightTimestamp)
               .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
               .toString();

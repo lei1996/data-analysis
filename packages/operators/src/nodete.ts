@@ -1,3 +1,4 @@
+import { getNowTime } from './../../utils/time';
 import {
   share,
   Observable,
@@ -6,7 +7,6 @@ import {
   of,
   Big,
   BigSource,
-  bufferCount,
   map,
   filter,
   pipe,
@@ -16,7 +16,6 @@ import {
   min,
   scan,
   last,
-  tap,
   pairwise,
   SMA,
 } from '@data-analysis/core';
@@ -32,12 +31,11 @@ interface KLineBaseInterface {
 
 /**
  * 合并k线
- * @param interval 长度
+ * @param
  * @returns
  */
-export const mergeKLine = (interval: number) => {
+export const mergeKLine = () => {
   return pipe(
-    bufferCount<KLineBaseInterface>(interval, 1),
     concatMap((items: KLineBaseInterface[]) => {
       const source$ = zip(
         from(items).pipe(max((a, b) => (new Big(a.high).lt(b.high) ? -1 : 1))),
@@ -76,6 +74,7 @@ export const makeCuObservable = (interval: number = 5) => {
   return (observable: Observable<KLineBaseInterface>) =>
     new Observable<string>((subscriber: Subscriber<string>) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
+      let kLines: KLineBaseInterface[] = [];
       let indicator: SMA = new SMA(interval);
       const buy = {
         isOpen: false,
@@ -95,13 +94,28 @@ export const makeCuObservable = (interval: number = 5) => {
       };
 
       const main$ = observable.pipe(
-        tap((x) => {
-          currKLine = x;
+        concatMap((item) => {
+          currKLine = item;
+
+          // 如果是最后一个k线，则更新它
+          if (kLines[kLines.length - 1].id === item.id) {
+            kLines[kLines.length - 1] = item;
+          } else {
+            kLines.push(item);
+          }
+
+          // 数组长度 超出 interval 则 弹出第一个值
+          if (kLines.length > interval) {
+            kLines.shift();
+          }
+
+          return of(kLines);
         }),
+        filter((x) => x.length === interval),
         share(),
       );
 
-      const share$ = main$.pipe(mergeKLine(interval), share());
+      const share$ = main$.pipe(mergeKLine(), share());
 
       const source$ = share$.pipe(
         concatMap(([x1, x2]) => {
@@ -204,7 +218,11 @@ export const makeCuObservable = (interval: number = 5) => {
           map(([_, x2]) => x2),
         )
         .subscribe((x) => {
-          console.log((currKLine as KLineBaseInterface).id, x, '5 result ->');
+          console.log(
+            getNowTime((currKLine as KLineBaseInterface).id),
+            x,
+            '5 result ->',
+          );
           indicator.update(x);
         });
 

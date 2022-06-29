@@ -5,8 +5,8 @@ import { Big } from '@data-analysis/core';
 export const getTime = () => (new Date().getTime() / 1000) | 0;
 
 // 输出时间
-export const getNowTime = (id: any) =>
-  `${moment(Number(`${id}`))
+export const getNowTime = (id?: any) =>
+  `${moment(!!id ? Number(id) : new Date())
     .utcOffset(8 * 60)
     .format('YYYY/MM/DD HH:mm:ss')}`;
 
