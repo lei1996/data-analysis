@@ -297,7 +297,7 @@ class HuobiStore {
   }
 
   main() {
-    this.fetchHistoryKlines$(this.symbol, this.interval, 5, 1)
+    this.fetchHistoryKlines$(this.symbol, this.interval, 79, 1)
       .pipe(
         tap(x => console.log(x, this.symbol)),
         makeCuObservable(5),
@@ -439,9 +439,9 @@ class HuobiStore {
    */
   wsKlines$(symbol: string) {
     return this.getMapValue(symbol).lastKLine.pipe(
-      pairwise(),
-      filter((items) => items[0].id !== items[1].id),
-      map((x) => x[0]),
+      // pairwise(),
+      // filter((items) => items[0].id !== items[1].id),
+      // map((x) => x[0]),
     );
   }
 

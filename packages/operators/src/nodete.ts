@@ -18,6 +18,7 @@ import {
   last,
   pairwise,
   SMA,
+  ADX,
 } from '@data-analysis/core';
 
 interface KLineBaseInterface {
@@ -75,6 +76,7 @@ export const makeCuObservable = (interval: number = 5) => {
     new Observable<string>((subscriber: Subscriber<string>) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
       let kLines: KLineBaseInterface[] = [];
+      let adx = new ADX(14);
       let indicator: SMA = new SMA(interval);
       const buy = {
         isOpen: false,
@@ -105,11 +107,22 @@ export const makeCuObservable = (interval: number = 5) => {
           }
 
           // 数组长度 超出 interval 则 弹出第一个值
-          if (kLines.length > interval) {
+          if (kLines.length > interval * 15 + 4) {
             kLines.shift();
+
+            adx = new ADX(14);
+            from(kLines)
+              .pipe(filter((_, i) => i % 3 === 0))
+              .subscribe(({ close, high, low }) => {
+                adx.update({
+                  close,
+                  high,
+                  low,
+                });
+              });
           }
 
-          return of(kLines);
+          return of(kLines.slice(-interval));
         }),
         filter((x) => x.length === interval),
         share(),
@@ -125,13 +138,25 @@ export const makeCuObservable = (interval: number = 5) => {
             result.prev = x1.dir;
           } else if (result.prev !== x1.dir) {
             if (x1.dir === 'up') {
-              if (!result.prevOpen.eq(0)) {
-                info.push('平多', '开多');
+              if (!result.prevOpen.eq(0) && adx.isStable) {
+                const x1 = adx.getResult();
+
+                if (x1.gt(25)) {
+                  info.push('平空', '开空');
+                } else {
+                  info.push('平多', '开多');
+                }
               }
               result.prevOpen = new Big(x2.close);
             } else {
-              if (!result.prevOpen.eq(0)) {
-                info.push('平空', '开空');
+              if (!result.prevOpen.eq(0) && adx.isStable) {
+                const x1 = adx.getResult();
+
+                if (x1.gt(25)) {
+                  info.push('平多', '开多');
+                } else {
+                  info.push('平空', '开空');
+                }
               }
               result.prevOpen = new Big(x2.close);
             }
