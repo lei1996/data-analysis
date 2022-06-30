@@ -84,6 +84,7 @@ export const makeCuObservable = (interval: number = 5) => {
     new Observable<string>((subscriber: Subscriber<string>) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
       let kLines: KLineBaseInterface[] = [];
+      
       const buy = {
         isOpen: false,
       };
@@ -108,15 +109,15 @@ export const makeCuObservable = (interval: number = 5) => {
           }
 
           // 数组长度 超出 interval 则 弹出第一个值
-          if (kLines.length > 300) {
+          if (kLines.length > 30) {
             kLines.shift();
           }
 
           return of(kLines).pipe(
-            filter((x) => x.length === 300),
+            filter((x) => x.length === 30),
             concatMap((items) =>
               from(items).pipe(
-                bufferCount(15, 15),
+                bufferCount(3, 3),
                 mergeKLine(),
                 map(([_, x2]) => x2),
                 toArray(),
@@ -150,6 +151,8 @@ export const makeCuObservable = (interval: number = 5) => {
             }
           }
 
+          console.log(info, 'info ->');
+
           prev.max = new Big(x1.max.high);
           prev.min = new Big(x1.min.low);
 
@@ -159,10 +162,10 @@ export const makeCuObservable = (interval: number = 5) => {
       );
 
       const buy$ = source$
-        .pipe(filter((info) => info === 1 || info === 2))
+        .pipe(filter((info) => info === 2 || info === 3))
         .subscribe({
           next(info) {
-            if (!buy.isOpen && info === 1) {
+            if (!buy.isOpen && info === 3) {
               subscriber.next('开多');
               buy.isOpen = true;
             } else if (buy.isOpen && info === 2) {
@@ -180,10 +183,10 @@ export const makeCuObservable = (interval: number = 5) => {
         });
 
       const sell$ = source$
-        .pipe(filter((info) => info === 3 || info === 2))
+        .pipe(filter((info) => info === 1 || info === 2))
         .subscribe({
           next(info) {
-            if (!sell.isOpen && info === 3) {
+            if (!sell.isOpen && info === 1) {
               subscriber.next('开空');
               sell.isOpen = true;
             } else if (sell.isOpen && info === 2) {
