@@ -136,7 +136,7 @@ class MainStore {
             ),
           ),
         ),
-        // tap(x => console.log(x, '分组数据')),
+        tap(x => console.log(x, '分组数据')),
         concatMap((items) => {
           const obj = {
             sum: new Big(0),

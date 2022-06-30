@@ -22,6 +22,8 @@ import {
   bufferCount,
   toArray,
   tap,
+  MACD,
+  EMA,
 } from '@data-analysis/core';
 
 interface KLineBaseInterface {
@@ -79,22 +81,66 @@ export const mergeKLine = () => {
   );
 };
 
+/**
+ * 合并收益
+ * @param
+ * @returns
+ */
+export const mergeProfit = (interval: number) => {
+  return pipe(
+    filter(({ profit }: { profit: Big }) => !profit.eq(0)),
+    map(({ profit }) => profit),
+    bufferCount(interval, 1),
+    concatMap((items) =>
+      from(items).pipe(scan((curr, next) => curr.plus(next), new Big(0))),
+    ),
+  );
+};
+
+class BaseCs {
+  isOpen: boolean = false;
+  prev: Big = new Big(0);
+  profit: Big = new Big(0);
+
+  getProfit(info: string, price: Big) {
+    if (this.prev.eq(0)) return new Big(0);
+
+    if (info.includes('平空')) {
+      return price.minus(this.prev);
+    } else if (info.includes('平多')) {
+      return this.prev.minus(price);
+    } else {
+      return new Big(0);
+    }
+  }
+}
+
 export const makeCuObservable = (interval: number = 5) => {
   return (observable: Observable<KLineBaseInterface>) =>
     new Observable<string>((subscriber: Subscriber<string>) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
       let kLines: KLineBaseInterface[] = [];
-      
-      const buy = {
+      let macd = new MACD({
+        indicator: EMA,
+        shortInterval: 6,
+        longInterval: 13,
+        signalInterval: 4,
+      });
+      const buy1 = {
         isOpen: false,
+        ex: new BaseCs(),
       };
-      const sell = {
+      const sell1 = {
         isOpen: false,
+        ex: new BaseCs(),
       };
-
-      const prev = {
-        max: new Big(0),
-        min: new Big(0),
+      const buy2 = {
+        isOpen: false,
+        ex: new BaseCs(),
+      };
+      const sell2 = {
+        isOpen: false,
+        ex: new BaseCs(),
       };
 
       const main$ = observable.pipe(
@@ -113,64 +159,189 @@ export const makeCuObservable = (interval: number = 5) => {
             kLines.shift();
           }
 
-          return of(kLines).pipe(
-            filter((x) => x.length === 30),
-            concatMap((items) =>
-              from(items).pipe(
-                bufferCount(3, 3),
-                mergeKLine(),
-                map(([_, x2]) => x2),
-                toArray(),
-              ),
-            ),
+          macd.update(kLines[kLines.length - 1].close);
+
+          return of(macd).pipe(
+            filter((x) => x.isStable),
+            map((x) => x.getResult().histogram),
           );
         }),
         share(),
       );
 
-      const share$ = main$.pipe(
-        // tap((x) => console.log(x.length, 'kkk')),
-        mergeKLine(),
-        share(),
-      );
-
-      const source$ = share$.pipe(
-        concatMap(([x1, x2]) => {
+      const source$ = main$.pipe(
+        concatMap((x) => {
           let info = 0;
 
-          if (!prev.max.eq(0) && !prev.min.eq(0)) {
-            if (new Big(x2.high).gt(prev.max)) {
-              info = 1;
-            } else if (
-              new Big(x2.close).lt(prev.max) &&
-              new Big(x2.close).gt(prev.min)
-            ) {
-              info = 2;
-            } else if (new Big(x2.low).lt(prev.min)) {
-              info = 3;
-            }
+          if (x.gt(0)) {
+            info = 1;
+          } else if (x.eq(0)) {
+            info = 2;
+          } else {
+            info = 3;
           }
-
-          console.log(info, 'info ->');
-
-          prev.max = new Big(x1.max.high);
-          prev.min = new Big(x1.min.low);
 
           return of(info).pipe(filter((x) => !!x));
         }),
         share(),
       );
 
-      const buy$ = source$
-        .pipe(filter((info) => info === 2 || info === 3))
+      // const buySource1$ = source$.pipe(
+      //   concatMap((info) => {
+      //     let result = '';
+      //     let profit = new Big(0);
+
+      //     if (!buy1.ex.isOpen && info === 1) {
+      //       result = '开多';
+      //       buy1.ex.prev = new Big((currKLine as KLineBaseInterface).close);
+      //       buy1.ex.isOpen = true;
+      //     } else if (buy1.ex.isOpen && info !== 1) {
+      //       result = '平空';
+      //       profit = buy1.ex.getProfit(
+      //         result,
+      //         new Big((currKLine as KLineBaseInterface).close),
+      //       );
+      //       buy1.ex.isOpen = false;
+      //     }
+
+      //     return of({ result, profit }).pipe(filter((x) => !!x.result));
+      //   }),
+      //   share(),
+      // );
+
+      // const buy1$ = buySource1$
+      //   .pipe(filter(() => !buy1.ex.profit.eq(0)))
+      //   .subscribe({
+      //     next({ result }) {
+      //       const profit = buy1.ex.profit;
+      //       // console.log(profit.toNumber(), 'buy1 ->');
+
+      //       if (!buy1.isOpen && profit.gt(0) && result.includes('开')) {
+      //         subscriber.next(result);
+      //         buy1.isOpen = true;
+      //       } else if (buy1.isOpen && result.includes('平')) {
+      //         subscriber.next(result);
+      //         buy1.isOpen = false;
+      //       }
+      //     },
+      //     error(err) {
+      //       // We need to make sure we're propagating our errors through.
+      //       subscriber.error(err);
+      //     },
+      //     complete() {
+      //       subscriber.complete();
+      //     },
+      //   });
+
+      // const buyIsLock1$ = buySource1$.pipe(mergeProfit(3)).subscribe({
+      //   next(sum) {
+      //     buy1.ex.profit = sum;
+      //   },
+      //   error(err) {
+      //     // We need to make sure we're propagating our errors through.
+      //     subscriber.error(err);
+      //   },
+      //   complete() {
+      //     subscriber.complete();
+      //   },
+      // });
+
+      // const sellSource1$ = source$.pipe(
+      //   concatMap((info) => {
+      //     let result = '';
+      //     let profit = new Big(0);
+
+      //     if (!sell1.ex.isOpen && info === 3) {
+      //       result = '开空';
+      //       sell1.ex.prev = new Big((currKLine as KLineBaseInterface).close);
+      //       sell1.ex.isOpen = true;
+      //     } else if (sell1.ex.isOpen && info !== 3) {
+      //       result = '平多';
+      //       profit = sell1.ex.getProfit(
+      //         result,
+      //         new Big((currKLine as KLineBaseInterface).close),
+      //       );
+      //       sell1.ex.isOpen = false;
+      //     }
+
+      //     return of({ result, profit }).pipe(filter((x) => !!x.result));
+      //   }),
+      //   share(),
+      // );
+
+      // const sell1$ = sellSource1$
+      //   .pipe(filter(() => !sell1.ex.profit.eq(0)))
+      //   .subscribe({
+      //     next({ result }) {
+      //       const profit = sell1.ex.profit;
+      //       // console.log(profit.toNumber(), 'sell1 ->');
+
+      //       if (!sell1.isOpen && profit.gt(0) && result.includes('开')) {
+      //         subscriber.next(result);
+      //         sell1.isOpen = true;
+      //       } else if (sell1.isOpen && result.includes('平')) {
+      //         subscriber.next(result);
+      //         sell1.isOpen = false;
+      //       }
+      //     },
+      //     error(err) {
+      //       // We need to make sure we're propagating our errors through.
+      //       subscriber.error(err);
+      //     },
+      //     complete() {
+      //       subscriber.complete();
+      //     },
+      //   });
+
+      // const sellIsLock1$ = sellSource1$.pipe(mergeProfit(3)).subscribe({
+      //   next(sum) {
+      //     sell1.ex.profit = sum;
+      //   },
+      //   error(err) {
+      //     // We need to make sure we're propagating our errors through.
+      //     subscriber.error(err);
+      //   },
+      //   complete() {
+      //     subscriber.complete();
+      //   },
+      // });
+
+      const buySource2$ = source$.pipe(
+        concatMap((info) => {
+          let result = '';
+          let profit = new Big(0);
+
+          if (!buy1.ex.isOpen && info !== 1) {
+            result = '开多';
+            buy1.ex.prev = new Big((currKLine as KLineBaseInterface).close);
+            buy1.ex.isOpen = true;
+          } else if (buy1.ex.isOpen && info === 1) {
+            result = '平空';
+            profit = buy1.ex.getProfit(
+              result,
+              new Big((currKLine as KLineBaseInterface).close),
+            );
+            buy1.ex.isOpen = false;
+          }
+
+          return of({ result, profit }).pipe(filter((x) => !!x.result));
+        }),
+        share(),
+      );
+
+      const buy2$ = buySource2$
+        .pipe(filter(() => !buy2.ex.profit.eq(0)))
         .subscribe({
-          next(info) {
-            if (!buy.isOpen && info === 3) {
-              subscriber.next('开多');
-              buy.isOpen = true;
-            } else if (buy.isOpen && info === 2) {
-              subscriber.next('平空');
-              buy.isOpen = false;
+          next({ result }) {
+            const profit = buy2.ex.profit;
+            // console.log(profit.toNumber(), 'buy2 ->');
+
+            if (!buy2.isOpen && profit.gt(0) && result.includes('开')) {
+              subscriber.next(result);
+              buy2.isOpen = true;
+            } else if (buy2.isOpen && result.includes('平')) {
+              subscriber.next(result);
+              buy2.isOpen = false;
             }
           },
           error(err) {
@@ -182,16 +353,55 @@ export const makeCuObservable = (interval: number = 5) => {
           },
         });
 
-      const sell$ = source$
-        .pipe(filter((info) => info === 1 || info === 2))
+      const buyIsLock2$ = buySource2$.pipe(mergeProfit(3)).subscribe({
+        next(sum) {
+          buy2.ex.profit = sum;
+        },
+        error(err) {
+          // We need to make sure we're propagating our errors through.
+          subscriber.error(err);
+        },
+        complete() {
+          subscriber.complete();
+        },
+      });
+
+      const sellSource2$ = source$.pipe(
+        concatMap((info) => {
+          let result = '';
+          let profit = new Big(0);
+
+          if (!sell2.ex.isOpen && info !== 3) {
+            result = '开空';
+            sell2.ex.prev = new Big((currKLine as KLineBaseInterface).close);
+            sell2.ex.isOpen = true;
+          } else if (sell2.ex.isOpen && info === 3) {
+            result = '平多';
+            profit = sell2.ex.getProfit(
+              result,
+              new Big((currKLine as KLineBaseInterface).close),
+            );
+            sell2.ex.isOpen = false;
+          }
+
+          return of({ result, profit }).pipe(filter((x) => !!x.result));
+        }),
+        share(),
+      );
+
+      const sell2$ = sellSource2$
+        .pipe(filter(() => !sell2.ex.profit.eq(0)))
         .subscribe({
-          next(info) {
-            if (!sell.isOpen && info === 1) {
-              subscriber.next('开空');
-              sell.isOpen = true;
-            } else if (sell.isOpen && info === 2) {
-              subscriber.next('平多');
-              sell.isOpen = false;
+          next({ result }) {
+            const profit = sell2.ex.profit;
+            // console.log(profit.toNumber(), 'sell2 ->');
+
+            if (!sell2.isOpen && profit.gt(0) && result.includes('开')) {
+              subscriber.next(result);
+              sell2.isOpen = true;
+            } else if (sell2.isOpen && result.includes('平')) {
+              subscriber.next(result);
+              sell2.isOpen = false;
             }
           },
           error(err) {
@@ -202,11 +412,30 @@ export const makeCuObservable = (interval: number = 5) => {
             subscriber.complete();
           },
         });
+
+      const sellIsLock2$ = sellSource2$.pipe(mergeProfit(3)).subscribe({
+        next(sum) {
+          sell2.ex.profit = sum;
+        },
+        error(err) {
+          // We need to make sure we're propagating our errors through.
+          subscriber.error(err);
+        },
+        complete() {
+          subscriber.complete();
+        },
+      });
 
       return () => {
         console.log('makeCuObservable 清空状态');
-        buy$.unsubscribe();
-        sell$.unsubscribe();
+        // buy1$.unsubscribe();
+        // buyIsLock1$.unsubscribe();
+        // sell1$.unsubscribe();
+        // sellIsLock1$.unsubscribe();
+        buy2$.unsubscribe();
+        buyIsLock2$.unsubscribe();
+        sell2$.unsubscribe();
+        sellIsLock2$.unsubscribe();
 
         // Clean up all state.
         currKLine = null!;
