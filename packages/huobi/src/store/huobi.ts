@@ -439,9 +439,9 @@ class HuobiStore {
    */
   wsKlines$(symbol: string) {
     return this.getMapValue(symbol).lastKLine.pipe(
-      // pairwise(),
-      // filter((items) => items[0].id !== items[1].id),
-      // map((x) => x[0]),
+      pairwise(),
+      filter((items) => items[0].id !== items[1].id),
+      map((x) => x[0]),
     );
   }
 

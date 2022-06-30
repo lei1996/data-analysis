@@ -1,4 +1,4 @@
-import { getNowTime } from './../../utils/time';
+import { getNowTime } from '@data-analysis/utils/time';
 import {
   share,
   Observable,
@@ -19,6 +19,9 @@ import {
   pairwise,
   SMA,
   ADX,
+  bufferCount,
+  toArray,
+  tap,
 } from '@data-analysis/core';
 
 interface KLineBaseInterface {
@@ -53,18 +56,23 @@ export const mergeKLine = () => {
             of({
               dir: max.id > min.id ? 'up' : 'down',
               diff: new Big(max.high).minus(min.low),
+              max,
+              min,
             }),
           ),
         ),
         source$.pipe(
-          map(([max, min, volume]) => ({
-            id: items[0].id,
-            open: items[0].open,
-            close: items[items.length - 1].close,
-            high: max.high,
-            low: min.low,
-            volume,
-          })),
+          map(
+            ([max, min, volume]) =>
+              ({
+                id: items[0].id,
+                open: items[0].open,
+                close: items[items.length - 1].close,
+                high: max.high,
+                low: min.low,
+                volume: volume.toNumber(),
+              } as KLineBaseInterface),
+          ),
         ),
       );
     }),
@@ -76,23 +84,16 @@ export const makeCuObservable = (interval: number = 5) => {
     new Observable<string>((subscriber: Subscriber<string>) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
       let kLines: KLineBaseInterface[] = [];
-      let adx = new ADX(14);
-      let indicator: SMA = new SMA(interval);
       const buy = {
         isOpen: false,
       };
       const sell = {
         isOpen: false,
       };
-      const result = {
-        prev: '',
-        prevOpen: new Big(0),
-        sum: new Big(0),
-      };
-      const equalizerResult = {
-        prev: '',
-        prevOpen: new Big(0),
-        sum: new Big(0),
+
+      const prev = {
+        max: new Big(0),
+        min: new Big(0),
       };
 
       const main$ = observable.pipe(
@@ -107,76 +108,65 @@ export const makeCuObservable = (interval: number = 5) => {
           }
 
           // 数组长度 超出 interval 则 弹出第一个值
-          if (kLines.length > interval * 15 + 4) {
+          if (kLines.length > 300) {
             kLines.shift();
-
-            adx = new ADX(14);
-            from(kLines)
-              .pipe(filter((_, i) => i % 3 === 0))
-              .subscribe(({ close, high, low }) => {
-                adx.update({
-                  close,
-                  high,
-                  low,
-                });
-              });
           }
 
-          return of(kLines.slice(-interval));
+          return of(kLines).pipe(
+            filter((x) => x.length === 300),
+            concatMap((items) =>
+              from(items).pipe(
+                bufferCount(15, 15),
+                mergeKLine(),
+                map(([_, x2]) => x2),
+                toArray(),
+              ),
+            ),
+          );
         }),
-        filter((x) => x.length === interval),
         share(),
       );
 
-      const share$ = main$.pipe(mergeKLine(), share());
+      const share$ = main$.pipe(
+        // tap((x) => console.log(x.length, 'kkk')),
+        mergeKLine(),
+        share(),
+      );
 
       const source$ = share$.pipe(
         concatMap(([x1, x2]) => {
-          let info = [];
+          let info = 0;
 
-          if (result.prev === '') {
-            result.prev = x1.dir;
-          } else if (result.prev !== x1.dir) {
-            if (x1.dir === 'up') {
-              if (!result.prevOpen.eq(0) && adx.isStable) {
-                const x1 = adx.getResult();
-
-                if (x1.gt(25)) {
-                  info.push('平空', '开空');
-                } else {
-                  info.push('平多', '开多');
-                }
-              }
-              result.prevOpen = new Big(x2.close);
-            } else {
-              if (!result.prevOpen.eq(0) && adx.isStable) {
-                const x1 = adx.getResult();
-
-                if (x1.gt(25)) {
-                  info.push('平多', '开多');
-                } else {
-                  info.push('平空', '开空');
-                }
-              }
-              result.prevOpen = new Big(x2.close);
+          if (!prev.max.eq(0) && !prev.min.eq(0)) {
+            if (new Big(x2.high).gt(prev.max)) {
+              info = 1;
+            } else if (
+              new Big(x2.close).lt(prev.max) &&
+              new Big(x2.close).gt(prev.min)
+            ) {
+              info = 2;
+            } else if (new Big(x2.low).lt(prev.min)) {
+              info = 3;
             }
-            result.prev = x1.dir;
           }
 
-          return from(info);
+          prev.max = new Big(x1.max.high);
+          prev.min = new Big(x1.min.low);
+
+          return of(info).pipe(filter((x) => !!x));
         }),
         share(),
       );
 
       const buy$ = source$
-        .pipe(filter((info) => info === '开多' || info === '平空'))
+        .pipe(filter((info) => info === 1 || info === 2))
         .subscribe({
           next(info) {
-            if (!buy.isOpen && info.includes('开')) {
-              subscriber.next(info);
+            if (!buy.isOpen && info === 1) {
+              subscriber.next('开多');
               buy.isOpen = true;
-            } else if (buy.isOpen && info.includes('平')) {
-              subscriber.next(info);
+            } else if (buy.isOpen && info === 2) {
+              subscriber.next('平空');
               buy.isOpen = false;
             }
           },
@@ -190,14 +180,14 @@ export const makeCuObservable = (interval: number = 5) => {
         });
 
       const sell$ = source$
-        .pipe(filter((info) => info === '开空' || info === '平多'))
+        .pipe(filter((info) => info === 3 || info === 2))
         .subscribe({
           next(info) {
-            if (!sell.isOpen && info.includes('开')) {
-              subscriber.next(info);
+            if (!sell.isOpen && info === 3) {
+              subscriber.next('开空');
               sell.isOpen = true;
-            } else if (sell.isOpen && info.includes('平')) {
-              subscriber.next(info);
+            } else if (sell.isOpen && info === 2) {
+              subscriber.next('平多');
               sell.isOpen = false;
             }
           },
@@ -210,50 +200,8 @@ export const makeCuObservable = (interval: number = 5) => {
           },
         });
 
-      const equalizerSubscription = share$
-        .pipe(
-          concatMap(([x1, x2]) => {
-            if (equalizerResult.prev === '') {
-              equalizerResult.prev = x1.dir;
-            } else if (equalizerResult.prev !== x1.dir) {
-              if (x1.dir === 'up') {
-                console.log('up');
-                if (!equalizerResult.prevOpen.eq(0)) {
-                  equalizerResult.sum = equalizerResult.sum.plus(
-                    equalizerResult.prevOpen.minus(x2.close),
-                  );
-                }
-                equalizerResult.prevOpen = new Big(x2.close);
-              } else {
-                console.log('down');
-                if (!equalizerResult.prevOpen.eq(0)) {
-                  equalizerResult.sum = equalizerResult.sum.plus(
-                    new Big(x2.close).minus(equalizerResult.prevOpen),
-                  );
-                }
-                equalizerResult.prevOpen = new Big(x2.close);
-              }
-              equalizerResult.prev = x1.dir;
-            }
-
-            return of(equalizerResult.sum.toString());
-          }),
-          pairwise(),
-          filter(([x1, x2]) => x1 !== x2),
-          map(([_, x2]) => x2),
-        )
-        .subscribe((x) => {
-          console.log(
-            getNowTime((currKLine as KLineBaseInterface).id),
-            x,
-            '5 result ->',
-          );
-          indicator.update(x);
-        });
-
       return () => {
         console.log('makeCuObservable 清空状态');
-        equalizerSubscription.unsubscribe();
         buy$.unsubscribe();
         sell$.unsubscribe();
 
