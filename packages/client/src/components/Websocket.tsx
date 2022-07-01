@@ -47,8 +47,8 @@ function annotationDrawExtend(
   direction: 'buy' | 'sell',
 ) {
   ctx.font = '12px Roboto';
-  ctx.fillStyle = '#2d6187';
-  ctx.strokeStyle = '#2d6187';
+  ctx.fillStyle = direction === 'buy' ? '#ea2929' : '#12d2d0';
+  ctx.strokeStyle = direction === 'buy' ? '#ea2929' : '#12d2d0';
   const textWidth = ctx.measureText(text).width; // 计算文本宽度
   const startX = coordinate.x; // 默认 x轴 起始点
   let startY = direction === 'buy' ? coordinate.y + 6 : coordinate.y - 6; // 默认 y轴 起始点
