@@ -55,8 +55,8 @@ class MainStore {
     this.fetchKLine({
       symbol,
       interval,
-      // startTime: '1638255600',
-      // endTime: '1638259200',
+      // startTime: '1636449600',
+      // endTime: '1636467600',
       limit,
     })
       .pipe(
@@ -67,7 +67,7 @@ class MainStore {
             .minus(new Big(1).times(timeHuobi[interval]).times(1000))
             .toString();
 
-          for (let i = 0; i < 50; i++) {
+          for (let i = 0; i < 500; i++) {
             const startTime = new Big(rightTimestamp)
               .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
               .toString();
@@ -136,7 +136,7 @@ class MainStore {
             ),
           ),
         ),
-        tap(x => console.log(x, '分组数据')),
+        // tap(x => console.log(x, '分组数据')),
         concatMap((items) => {
           const obj = {
             sum: new Big(0),

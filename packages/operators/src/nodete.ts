@@ -97,6 +97,19 @@ export const mergeProfit = (interval: number) => {
   );
 };
 
+export const computeChange = () => {
+  return pipe(
+    concatMap((items: KLineBaseInterface[]) => {
+      const first = new Big(items[0].close);
+      const last = new Big(items[items.length - 1].close);
+
+      const absFirst = first.abs();
+
+      return of(last.minus(first).div(absFirst).times(100).round(2));
+    }),
+  );
+};
+
 class BaseCs {
   isOpen: boolean = false;
   prev: Big = new Big(0);
@@ -126,6 +139,7 @@ export const makeCuObservable = (interval: number = 5) => {
         longInterval: 13,
         signalInterval: 4,
       });
+      let status = 0;
       const buy1 = {
         isOpen: false,
         ex: new BaseCs(),
@@ -155,15 +169,15 @@ export const makeCuObservable = (interval: number = 5) => {
           }
 
           // 数组长度 超出 interval 则 弹出第一个值
-          if (kLines.length > 30) {
+          if (kLines.length > 60) {
             kLines.shift();
           }
 
-          macd.update(kLines[kLines.length - 1].close);
-
-          return of(macd).pipe(
-            filter((x) => x.isStable),
-            map((x) => x.getResult().histogram),
+          return of(kLines).pipe(
+            filter((x) => x.length === 60),
+            concatMap((items) =>
+              from(items).pipe(bufferCount(20, 20), computeChange(), toArray()),
+            ),
           );
         }),
         share(),
@@ -173,12 +187,14 @@ export const makeCuObservable = (interval: number = 5) => {
         concatMap((x) => {
           let info = 0;
 
-          if (x.gt(0)) {
+          console.log(getNowTime((currKLine as KLineBaseInterface).id), x[0].toNumber(), x[1].toNumber(), x[2].toNumber(), 'x -> number');
+
+          if (x[0].gt(0) && x[1].gt(0) && x[2].gt(0)) {
             info = 1;
-          } else if (x.eq(0)) {
-            info = 2;
-          } else {
+          } else if (x[0].lt(0) && x[1].lt(0) && x[2].lt(0)) {
             info = 3;
+          } else {
+            info = 2;
           }
 
           return of(info).pipe(filter((x) => !!x));
@@ -311,11 +327,11 @@ export const makeCuObservable = (interval: number = 5) => {
           let result = '';
           let profit = new Big(0);
 
-          if (!buy1.ex.isOpen && info !== 1) {
+          if (!buy1.ex.isOpen && info === 1) {
             result = '开多';
             buy1.ex.prev = new Big((currKLine as KLineBaseInterface).close);
             buy1.ex.isOpen = true;
-          } else if (buy1.ex.isOpen && info === 1) {
+          } else if (buy1.ex.isOpen && info !== 1) {
             result = '平空';
             profit = buy1.ex.getProfit(
               result,
@@ -353,7 +369,7 @@ export const makeCuObservable = (interval: number = 5) => {
           },
         });
 
-      const buyIsLock2$ = buySource2$.pipe(mergeProfit(3)).subscribe({
+      const buyIsLock2$ = buySource2$.pipe(mergeProfit(4)).subscribe({
         next(sum) {
           buy2.ex.profit = sum;
         },
@@ -371,11 +387,11 @@ export const makeCuObservable = (interval: number = 5) => {
           let result = '';
           let profit = new Big(0);
 
-          if (!sell2.ex.isOpen && info !== 3) {
+          if (!sell2.ex.isOpen && info === 3) {
             result = '开空';
             sell2.ex.prev = new Big((currKLine as KLineBaseInterface).close);
             sell2.ex.isOpen = true;
-          } else if (sell2.ex.isOpen && info === 3) {
+          } else if (sell2.ex.isOpen && info !== 3) {
             result = '平多';
             profit = sell2.ex.getProfit(
               result,
@@ -413,7 +429,7 @@ export const makeCuObservable = (interval: number = 5) => {
           },
         });
 
-      const sellIsLock2$ = sellSource2$.pipe(mergeProfit(3)).subscribe({
+      const sellIsLock2$ = sellSource2$.pipe(mergeProfit(4)).subscribe({
         next(sum) {
           sell2.ex.profit = sum;
         },

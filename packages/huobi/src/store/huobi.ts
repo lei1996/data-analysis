@@ -297,7 +297,7 @@ class HuobiStore {
   }
 
   main() {
-    this.fetchHistoryKlines$(this.symbol, this.interval, 79, 1)
+    this.fetchHistoryKlines$(this.symbol, this.interval, 80, 1)
       .pipe(
         tap(x => console.log(x, this.symbol)),
         makeCuObservable(5),
