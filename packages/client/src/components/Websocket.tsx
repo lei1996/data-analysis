@@ -10,9 +10,7 @@ import {
   of,
   reduce,
   share,
-  switchMapTo,
   tap,
-  timer,
   toArray,
 } from '@data-analysis/core';
 import React, { useCallback, useEffect, useRef } from 'react';
@@ -159,25 +157,6 @@ function WebSocketDemo() {
         if (chartRef.current) {
           // 初始化 k线数据
           chartRef.current.applyNewData(x);
-          // chartRef.current.createAnnotation([
-          //   {
-          //     point: {
-          //       timestamp: x[x.length - 3].timestamp,
-          //       value: x[x.length - 3].low,
-          //     },
-          //     styles: {
-          //       position: 'point',
-          //       offset: [2, 0],
-          //       symbol: {
-          //         type: 'custom',
-          //       },
-          //     },
-          //     drawExtend: (params: any) => {
-          //       const { ctx, coordinate } = params;
-          //       annotationDrawExtend(ctx, coordinate, `test 数据`, 'sell');
-          //     },
-          //   },
-          // ]);
         }
       });
 

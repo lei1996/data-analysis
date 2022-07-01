@@ -83,6 +83,9 @@ function App() {
     <div>
       <h1 className={styles.title}>App</h1>
       <div>
+        
+      </div>
+      <div>
         <WebSocketDemo />
       </div>
       <div>

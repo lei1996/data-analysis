@@ -55,7 +55,6 @@ import {
   BinancekLine,
   KLineBaseInterface,
 } from '@data-analysis/types/kline.type';
-import { autoRsiExTestOperator } from '@data-analysis/operators/src/rsi';
 import { makeSuObservable } from '@data-analysis/operators';
 
 // 这里是面向 用户 的 store

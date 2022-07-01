@@ -32,11 +32,16 @@ class HuobiStore {
   currTard: KLineParamsInterface = {
     symbol: 'BTC-USDT',
     interval: '1min',
-    limit: '300'
+    limit: '300',
   };
 
   constructor() {
     makeAutoObservable(this);
+    this.onLoad();
+  }
+
+  onLoad() {
+    this.fetchExchangeInfoData().subscribe((x) => console.log(x, '交易对列表'));
   }
 
   /**
