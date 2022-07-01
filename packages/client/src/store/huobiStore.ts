@@ -1,7 +1,21 @@
 import axios from 'axios';
 
-import { defer, map, of, pipe, switchMap } from '@data-analysis/core';
-import { SwapCrossAccountInfoResultInterface } from '@data-analysis/crypto-huobi/src/types';
+import {
+  concatMap,
+  defer,
+  filter,
+  from,
+  map,
+  Observable,
+  of,
+  pipe,
+  switchMap,
+  toArray,
+} from '@data-analysis/core';
+import {
+  SwapContractInfoResultInterface,
+  SwapCrossAccountInfoResultInterface,
+} from '@data-analysis/crypto-huobi/src/types';
 import { makeAutoObservable } from 'mobx';
 import { spliceURL } from '@data-analysis/utils/spliceURL';
 
@@ -35,13 +49,29 @@ class HuobiStore {
     limit: '300',
   };
 
+  exLists: Array<string> = [];
+  intervalLists = ['1min', '5min', '15min', '30min', '60min', '4hour'];
+
+
   constructor() {
     makeAutoObservable(this);
     this.onLoad();
   }
 
   onLoad() {
-    this.fetchExchangeInfoData().subscribe((x) => console.log(x, '交易对列表'));
+    this.fetchExchangeInfoData()
+      .pipe(
+        concatMap((items) =>
+          from(items).pipe(
+            filter((x) => x.contract_status === 1),
+            map((x) => x.contract_code),
+            toArray(),
+          ),
+        ),
+      )
+      .subscribe((x) => {
+        this.exLists = x;
+      });
   }
 
   /**
@@ -60,7 +90,7 @@ class HuobiStore {
    * @param
    * @returns
    */
-  fetchExchangeInfoData() {
+  fetchExchangeInfoData(): Observable<SwapContractInfoResultInterface[]> {
     return defer(() =>
       axios.get('/api/exchangeInfo/huobi').then((x) => x.data),
     );

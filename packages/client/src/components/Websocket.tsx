@@ -199,6 +199,7 @@ function WebSocketDemo() {
                 })),
               ),
             ),
+            share(),
           );
 
         main$
@@ -231,7 +232,7 @@ function WebSocketDemo() {
     return () => {
       didUnmount.current = true;
     };
-  }, []);
+  }, [huobiStore.currTard.symbol, huobiStore.currTard.interval]);
 
   useEffect(() => {
     if (lastMessage !== null) {
@@ -256,7 +257,7 @@ function WebSocketDemo() {
       const kLineSubscription = main$
         .pipe(
           filter(
-            (item: any) => !!item.ch && (item.ch as string).includes('kline'),
+            (item: any) => !!item.ch && (item.ch as string).includes(huobiStore.currTard.symbol),
           ),
           map(({ tick: { close, high, id, low, open, vol } }) => ({
             close,
@@ -288,17 +289,17 @@ function WebSocketDemo() {
         kLineSubscription.unsubscribe();
       };
     }
-  }, [lastMessage]);
+  }, [lastMessage, huobiStore.currTard.symbol, huobiStore.currTard.interval]);
 
-  const handleClickSendMessage = useCallback(() => {
-    const { symbol, interval, limit } = huobiStore.currTard;
+  const handleClickSendMessage = () => {
+    const { symbol, interval } = huobiStore.currTard;
 
     sendMessage(
       JSON.stringify({
         sub: `market.${symbol}.kline.${interval}`,
       }),
     );
-  }, []);
+  };
 
   const runStrategy = () => {
     let kline: any = {};
@@ -413,6 +414,38 @@ function WebSocketDemo() {
 
   return (
     <div>
+      <div>
+        <select
+          value={huobiStore.currTard.symbol}
+          onChange={(evt) => {
+            huobiStore.currTard.symbol = evt.target.value;
+            handleClickSendMessage();
+          }}
+        >
+          {huobiStore.exLists.map((item, i) => {
+            return (
+              <option key={i} value={item}>
+                {item}
+              </option>
+            );
+          })}
+        </select>
+        <select
+          value={huobiStore.currTard.interval}
+          onChange={(evt) => {
+            huobiStore.currTard.interval = evt.target.value;
+            handleClickSendMessage();
+          }}
+        >
+          {huobiStore.intervalLists.map((item, i) => {
+            return (
+              <option key={i} value={item}>
+                {item}
+              </option>
+            );
+          })}
+        </select>
+      </div>
       {/* <button onClick={handleClickChangeSocketUrl}>
         Click Me to change Socket Url
       </button> */}
