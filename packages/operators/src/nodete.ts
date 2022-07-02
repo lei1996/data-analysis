@@ -93,7 +93,10 @@ export const mergeProfit = (interval: number) => {
     map(({ profit }) => profit),
     bufferCount(interval, 1),
     concatMap((items) =>
-      from(items).pipe(scan((curr, next) => curr.plus(next), new Big(0))),
+      from(items).pipe(
+        scan((curr, next) => curr.plus(next), new Big(0)),
+        last(),
+      ),
     ),
   );
 };
