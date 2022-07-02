@@ -24,6 +24,7 @@ import {
   tap,
   MACD,
   EMA,
+  ATR,
 } from '@data-analysis/core';
 
 interface KLineBaseInterface {
@@ -135,10 +136,12 @@ export const makeCuObservable = (interval: number = 5) => {
       let kLines: KLineBaseInterface[] = [];
       let macd = new MACD({
         indicator: EMA,
-        shortInterval: 6,
-        longInterval: 13,
-        signalInterval: 4,
+        shortInterval: 13,
+        longInterval: 34,
+        signalInterval: 9,
       });
+      let atr = new ATR(13);
+      let adx = new ADX(60);
       let status = 0;
       const buy1 = {
         isOpen: false,
@@ -159,6 +162,7 @@ export const makeCuObservable = (interval: number = 5) => {
 
       const main$ = observable.pipe(
         concatMap((item) => {
+          const { high, low, close } = item;
           currKLine = item;
 
           // 如果是最后一个k线，则更新它
@@ -172,6 +176,17 @@ export const makeCuObservable = (interval: number = 5) => {
           if (kLines.length > 60) {
             kLines.shift();
           }
+
+          atr.update({
+            high,
+            low,
+            close,
+          });
+          adx.update({
+            high,
+            low,
+            close,
+          });
 
           return of(kLines).pipe(
             filter((x) => x.length === 60),
@@ -187,7 +202,20 @@ export const makeCuObservable = (interval: number = 5) => {
         concatMap((x) => {
           let info = 0;
 
-          console.log(getNowTime((currKLine as KLineBaseInterface).id), x[0].toNumber(), x[1].toNumber(), x[2].toNumber(), 'x -> number');
+          console.log(
+            getNowTime((currKLine as KLineBaseInterface).id),
+            x[0].toNumber(),
+            x[1].toNumber(),
+            x[2].toNumber(),
+            'x -> number',
+          );
+
+          if (atr.isStable) {
+            console.log(atr.getResult().toNumber(), 'atr value ->');
+          }
+          if (adx.isStable) {
+            console.log(adx.getResult().toNumber(), 'adx value ->');
+          }
 
           if (x[0].gt(0) && x[1].gt(0) && x[2].gt(0)) {
             info = 1;
@@ -346,13 +374,18 @@ export const makeCuObservable = (interval: number = 5) => {
       );
 
       const buy2$ = buySource2$
-        .pipe(filter(() => !buy2.ex.profit.eq(0)))
+        .pipe(filter(() => !buy2.ex.profit.eq(0) && adx.isStable))
         .subscribe({
           next({ result }) {
             const profit = buy2.ex.profit;
             // console.log(profit.toNumber(), 'buy2 ->');
 
-            if (!buy2.isOpen && profit.gt(0) && result.includes('开')) {
+            if (
+              !buy2.isOpen &&
+              profit.gt(0) &&
+              adx.getResult().gt(15) &&
+              result.includes('开')
+            ) {
               subscriber.next(result);
               buy2.isOpen = true;
             } else if (buy2.isOpen && result.includes('平')) {
@@ -406,13 +439,18 @@ export const makeCuObservable = (interval: number = 5) => {
       );
 
       const sell2$ = sellSource2$
-        .pipe(filter(() => !sell2.ex.profit.eq(0)))
+        .pipe(filter(() => !sell2.ex.profit.eq(0) && adx.isStable))
         .subscribe({
           next({ result }) {
             const profit = sell2.ex.profit;
             // console.log(profit.toNumber(), 'sell2 ->');
 
-            if (!sell2.isOpen && profit.gt(0) && result.includes('开')) {
+            if (
+              !sell2.isOpen &&
+              profit.gt(0) &&
+              adx.getResult().gt(15) &&
+              result.includes('开')
+            ) {
               subscriber.next(result);
               sell2.isOpen = true;
             } else if (sell2.isOpen && result.includes('平')) {

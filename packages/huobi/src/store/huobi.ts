@@ -365,8 +365,8 @@ class HuobiStore {
 
     return this.fetchSwapCrossOrder({
       ...order,
-      order_price_type: 'post_only',
-      price: price,
+      order_price_type: 'optimal_20',
+      // price: price,
     }).pipe(
       delay(5 * 1000),
       filter(x => !!x),
