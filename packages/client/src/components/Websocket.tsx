@@ -168,6 +168,27 @@ function WebSocketDemo() {
     });
 
     if (chartRef.current) {
+      chartRef.current.createTechnicalIndicator(
+        {
+          name: 'MACD',
+          calcParams: [13, 34, 9],
+        },
+        false,
+        {
+          id: 'pane_1',
+          height: 100,
+          dragEnabled: true,
+        },
+      );
+      chartRef.current.createTechnicalIndicator(
+        'ATR',
+        false,
+        {
+          id: 'pane_2',
+          height: 100,
+          dragEnabled: true,
+        },
+      );
       chartRef.current.loadMore((timestamp) => {
         console.log(timestamp, '历史时间戳');
         const { symbol, interval, limit = '' } = huobiStore.currTard;
@@ -257,7 +278,9 @@ function WebSocketDemo() {
       const kLineSubscription = main$
         .pipe(
           filter(
-            (item: any) => !!item.ch && (item.ch as string).includes(huobiStore.currTard.symbol),
+            (item: any) =>
+              !!item.ch &&
+              (item.ch as string).includes(huobiStore.currTard.symbol),
           ),
           map(({ tick: { close, high, id, low, open, vol } }) => ({
             close,
