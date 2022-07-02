@@ -141,7 +141,7 @@ export const makeCuObservable = (interval: number = 5) => {
         signalInterval: 9,
       });
       let atr = new ATR(13);
-      let adx = new ADX(60);
+      let adx = new ADX(45);
       let status = 0;
       const buy1 = {
         isOpen: false,
@@ -177,11 +177,6 @@ export const makeCuObservable = (interval: number = 5) => {
             kLines.shift();
           }
 
-          atr.update({
-            high,
-            low,
-            close,
-          });
           adx.update({
             high,
             low,
@@ -210,9 +205,6 @@ export const makeCuObservable = (interval: number = 5) => {
             'x -> number',
           );
 
-          if (atr.isStable) {
-            console.log(atr.getResult().toNumber(), 'atr value ->');
-          }
           if (adx.isStable) {
             console.log(adx.getResult().toNumber(), 'adx value ->');
           }
