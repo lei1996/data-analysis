@@ -1,34 +1,19 @@
 import {
-  ADX,
-  EMA,
-  RSI,
-  MACD,
   share,
   Observable,
   Subscriber,
   concatMap,
   of,
   Big,
-  from,
-  zip,
-  defaultIfEmpty,
-  last,
-  max,
   BigSource,
-  bufferCount,
   map,
-  tap,
   filter,
-  delay,
-  min,
+  zip,
+  skip,
+  tap,
 } from '@data-analysis/core';
-import { divideEquallyRx } from '@data-analysis/core/src/divideEqually';
-import { Business, Prev } from './base';
-import { equalizerRxOperator, orderHubRxOperator } from './core';
-import { EqualizerRxInterface } from './types/equalizer.Rx';
-import { OperatorInterface } from './types/macd';
 
-type OperatorType = typeof buyOperator | typeof sellOperator;
+import { MACD, EMA, ADX } from 'rxjs-trading-signals';
 
 interface KLineBaseInterface {
   id: number; // 时间戳
@@ -38,388 +23,148 @@ interface KLineBaseInterface {
   high: BigSource; // 最高价
   volume: BigSource; // 成交量
 }
+class BaseCs {
+  isOpen: boolean = false;
+  prev: Big = new Big(0);
+  profit: Big = new Big(0);
 
-// 查找最优解 入参
-interface AutoBestInterface {
-  bests: number[][]; // 上界 和 下界  -> [10, -5]
-  maxminArrs: BigSource[]; // macd 指标缓存
-  klines: KLineBaseInterface[]; // kLine 缓存
+  getProfit(info: string, price: Big) {
+    if (this.prev.eq(0)) return new Big(0);
+
+    if (info.includes('平空')) {
+      return price.minus(this.prev);
+    } else if (info.includes('平多')) {
+      return this.prev.minus(price);
+    } else {
+      return new Big(0);
+    }
+  }
 }
 
-export const makeSuObservable = (interval: number, maxLength: number = 300) => {
+export const makeCuObservable = (interval: number = 5) => {
   return (observable: Observable<KLineBaseInterface>) =>
     new Observable<string>((subscriber: Subscriber<string>) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
-      let buy = new Business();
-      let sell = new Business();
-      let macdIndicator = new MACD({
-        indicator: EMA,
-        shortInterval: 6,
-        longInterval: 13,
-        signalInterval: 4,
-      });
-      let volumeIndicator = new RSI(interval); // 量的 RSI 值
-      let adxIndicator = new ADX(interval); // 当前趋势 值
-      let count: number = 0; // 推入的 k线数量
+      const buy = new BaseCs();
+      const sell = new BaseCs();
 
-      // 判断是否超过了初始化的参数
-      const isComplete = (): boolean => {
-        return count > maxLength;
-      };
-
-      const main$ = observable.pipe(share());
-
-      const Subscription1 = main$.subscribe({
-        next(item) {
-          const { high, low, close, volume } = item;
-
-          volumeIndicator.update(volume);
-          adxIndicator.update({ high, low, close });
-        },
-        error(err) {
-          // We need to make sure we're propagating our errors through.
-          subscriber.error(err);
-        },
-        complete() {
-          subscriber.complete();
-        },
-      });
-
-      const share$ = main$.pipe(
-        concatMap((item) => {
-          const { close } = item;
-          currKLine = item;
-
-          macdIndicator.update(close);
-
-          if (macdIndicator.isStable) {
-            count++;
-            const { histogram } = macdIndicator.getResult();
-            return of(histogram);
-          }
-          return of();
+      const main$ = observable.pipe(
+        tap((curr) => {
+          currKLine = curr;
         }),
         share(),
       );
 
-      const buyShare$ = share$.pipe(
-        concatMap((x) => of({ result: x, best: buy.best })),
-        buyOperator(),
-        filter(() => isComplete() && adxIndicator.getResult().lt(99)),
+      const macd$ = main$.pipe(
+        map(({ close }) => new Big(close)),
+        MACD({
+          indicator: EMA,
+          shortInterval: 12,
+          longInterval: 26,
+          signalInterval: 9,
+        }),
+        skip(1),
       );
 
-      const sellShare$ = share$.pipe(
-        concatMap((x) => of({ result: x, best: sell.best })),
-        sellOperator(),
-        filter(() => isComplete() && adxIndicator.getResult().lt(99)),
+      const adx$ = main$.pipe(
+        map(({ close, high, low }) => ({ close, high, low })),
+        ADX(14),
       );
 
-      const buyIsLockSubscription = buyShare$
-        .pipe(
-          concatMap((info) =>
-            of({
-              info,
-              _price: (currKLine as KLineBaseInterface).close,
-            }),
-          ),
-          orderHubRxOperator(),
-          equalizerRxOperator(7),
-        )
-        .subscribe((x) => {
-          console.log(
-            `buy -> beforeSum: ${x.beforeSum.toString()}, aftersum: ${x.aftersum.toString()}, isLock: ${
-              x.isLock
-            }`,
-          );
-          buy.isLock = x.isLock;
-        });
-      const sellIsLockSubscription = sellShare$
-        .pipe(
-          concatMap((info) =>
-            of({
-              info,
-              _price: (currKLine as KLineBaseInterface).close,
-            }),
-          ),
-          orderHubRxOperator(),
-          equalizerRxOperator(7),
-        )
-        .subscribe((x) => {
-          console.log(
-            `sell -> beforeSum: ${x.beforeSum.toString()}, aftersum: ${x.aftersum.toString()}, isLock: ${
-              x.isLock
-            }`,
-          );
-          sell.isLock = x.isLock;
-        });
+      // macd$.subscribe((x) =>
+      //   console.log(x.histogram.round(8).toString(), 'macd value ->'),
+      // );
 
-      const buySubscription = buyShare$.subscribe({
-        next(item) {
-          if (!buy.isOpen && !buy.isLock && item.includes('开')) {
+      // adx$.subscribe((x) =>
+      //   console.log(new Big(x).round(8).toString(), 'adx value ->'),
+      // );
+
+      const source$ = zip(macd$.pipe(), adx$.pipe()).pipe(
+        concatMap(([macd, adx]) => {
+          const { histogram } = macd;
+          let info = 0;
+
+          if (histogram.gt(0)) {
+            info = 1;
+          } else if (histogram.eq(0)) {
+            info = 2;
+          } else {
+            info = 3;
+          }
+
+          console.log(info, new Big(adx).round(8).toString(), 'adx ->');
+
+          return of(info).pipe(filter((x) => !!x));
+        }),
+        share(),
+      );
+
+      const buy$ = source$.pipe(
+        concatMap((info) => {
+          let result = '';
+          let profit = new Big(0);
+
+          if (!buy.isOpen && info === 1) {
+            // result = buy.profit.gt(0) ? '开多' : '开空';
+            result = '开多';
+            buy.prev = new Big((currKLine as KLineBaseInterface).close);
             buy.isOpen = true;
-            console.log('多头', item);
-            subscriber.next('开空');
-          } else if (buy.isOpen && item.includes('平')) {
+          } else if (buy.isOpen && info !== 1) {
+            // result = buy.profit.gt(0) ? '平空' : '平多';
+            result = '平空';
+            profit = buy.getProfit(
+              result,
+              new Big((currKLine as KLineBaseInterface).close),
+            );
+            buy.profit = profit;
             buy.isOpen = false;
-            console.log('多头', item);
-            subscriber.next('平多');
           }
-        },
-        error(err) {
-          // We need to make sure we're propagating our errors through.
-          subscriber.error(err);
-        },
-        complete() {
-          subscriber.complete();
-        },
-      });
-      const sellSubscription = sellShare$.subscribe({
-        next(item) {
-          if (!sell.isOpen && !sell.isLock && item.includes('开')) {
-            sell.isOpen = true;
-            console.log('空头', item);
-            subscriber.next('开多');
-          } else if (sell.isOpen && item.includes('平')) {
-            sell.isOpen = false;
-            console.log('空头', item);
-            subscriber.next('平空');
-          }
-        },
-        error(err) {
-          // We need to make sure we're propagating our errors through.
-          subscriber.error(err);
-        },
-        complete() {
-          subscriber.complete();
-        },
-      });
 
-      const autoBestShare$ = share$.pipe(
-        concatMap((x) =>
-          of({ result: x, item: currKLine as KLineBaseInterface }),
-        ),
-        bufferCount(maxLength, 8), // 每间隔 1/3 k线发射一次值 第一次发射必须要填满 maxLength 根k线
-        map((x) =>
-          x.reduce(
-            (curr, { result, item }) => ({
-              klines: [...curr.klines, item],
-              maxminArrs: [...curr.maxminArrs, result],
-              maxVal: new Big(curr.maxVal).gt(result) ? curr.maxVal : result,
-              minVal: new Big(curr.minVal).lt(result) ? curr.minVal : result,
-            }),
-            {
-              klines: [] as KLineBaseInterface[],
-              maxminArrs: [] as BigSource[],
-              maxVal: new Big(-9999999) as BigSource,
-              minVal: new Big(9999999) as BigSource,
-            },
-          ),
-        ),
-        concatMap(({ klines, maxminArrs, maxVal, minVal }) => {
-          return divideEquallyRx(minVal, maxVal, 10).pipe(
-            concatMap((nums) => {
-              const result: any = {
-                bests: [] as number[][],
-                maxminArrs,
-                klines,
-              };
-
-              for (let i = 1; i < nums.length - 1; i++) {
-                // for (let j = i + 1; j < nums.length - 1; j++) {
-                result.bests.push([nums[i], nums[i]]);
-                // }
-              }
-
-              return of(result);
-            }),
-          );
+          return of({ result, profit }).pipe(filter((x) => !!x.result));
         }),
-        share(),
       );
 
-      const buyAutoBestSubscription = autoBestShare$
-        .pipe(autoBestOperator(buyOperator, 7))
-        .subscribe(([equalizerResult, best]) => {
-          // console.log('buyAutoBestSubscription ->', best);
-          buy.best = best;
-          buy.isLock = equalizerResult.isLock;
-        });
+      const buySubscriber = buy$.subscribe({
+        next({ result }) {
+          subscriber.next(result);
+        },
+        error(err) {
+          // We need to make sure we're propagating our errors through.
+          subscriber.error(err);
+        },
+        complete() {
+          subscriber.complete();
+        },
+      });
 
-      const sellAutoBestSubscription = autoBestShare$
-        .pipe(autoBestOperator(sellOperator, 7))
-        .subscribe(([equalizerResult, best]) => {
-          // console.log('sellAutoBestSubscription ->', best);
-          sell.best = best;
-          sell.isLock = equalizerResult.isLock;
-        });
+      const sell$ = source$.pipe(
+        concatMap((info) => {
+          let result = '';
+          let profit = new Big(0);
 
-      return () => {
-        console.log('makeSuObservable 清空状态');
-        Subscription1.unsubscribe();
-        buySubscription.unsubscribe();
-        buyIsLockSubscription.unsubscribe();
-        buyAutoBestSubscription.unsubscribe();
-        sellSubscription.unsubscribe();
-        sellIsLockSubscription.unsubscribe();
-        sellAutoBestSubscription.unsubscribe();
-        // Clean up all state.
-        macdIndicator = null!;
-        volumeIndicator = null!;
-        adxIndicator = null!;
-        currKLine = null!;
-      };
-    });
-};
-
-// 查找最优解
-const autoBestOperator = (operator: OperatorType, interval: number) => {
-  return (observable: Observable<AutoBestInterface>) =>
-    new Observable<[EqualizerRxInterface, number[]]>(
-      (subscriber: Subscriber<[EqualizerRxInterface, number[]]>) => {
-        const subscription = observable
-          .pipe(
-            concatMap(({ bests, maxminArrs, klines }) => {
-              return from(bests).pipe(
-                concatMap((best) => {
-                  let kline: any = {};
-                  const last$ = zip(from(klines), from(maxminArrs)).pipe(
-                    concatMap(([item, result]) => {
-                      kline = item;
-                      return of({ result, best });
-                    }),
-                    operator(),
-                    concatMap((info) =>
-                      of({
-                        info,
-                        _price: kline.close,
-                      }),
-                    ),
-                    orderHubRxOperator(),
-                    equalizerRxOperator(interval),
-                    defaultIfEmpty({
-                      beforeSum: new Big(0),
-                      aftersum: new Big(0),
-                      isLock: true,
-                    } as EqualizerRxInterface),
-                    last(),
-                  );
-
-                  return zip(last$, of(best));
-                }),
-                // 最好的策略
-                min<[EqualizerRxInterface, number[]]>((a, b) =>
-                  new Big(a[0].beforeSum).lt(b[0].beforeSum) ? -1 : 1,
-                ),
-              );
-            }),
-          )
-          .subscribe({
-            next(item) {
-              // console.log(item, 'auto 处理好的数据 - ');
-              subscriber.next(item);
-            },
-            error(err) {
-              // We need to make sure we're propagating our errors through.
-              subscriber.error(err);
-            },
-            complete() {
-              subscriber.complete();
-            },
-          });
-
-        return () => {
-          subscription.unsubscribe();
-          console.log('autoRsiExOperator 清空状态');
-        };
-      },
-    );
-};
-
-// 做多 - 操作符
-export const buyOperator = () => {
-  return (observable: Observable<OperatorInterface>) =>
-    new Observable<string>((subscriber: Subscriber<string>) => {
-      let prev: Prev = '';
-      let isOpen: boolean = false;
-
-      const subscription = observable
-        // .pipe(
-        //   tap(() => console.log(prev, isOpen)),
-        //   delay(20),
-        // )
-        .subscribe({
-          next({ result, best }) {
-            let info: string = '';
-
-            const [upper, lower] = best;
-            const hist = new Big(result);
-
-            if (hist.gt(upper) && isOpen && (prev === 'DOWN' || prev === '')) {
-              info = '平空';
-              prev = 'UP';
-              isOpen = false;
-            } else if (
-              hist.lt(lower) &&
-              !isOpen &&
-              (prev === 'UP' || prev === '')
-            ) {
-              info = '开多';
-              prev = 'DOWN';
-              isOpen = true;
-            }
-
-            if (!!info) {
-              subscriber.next(info);
-            }
-          },
-          error(err) {
-            // We need to make sure we're propagating our errors through.
-            subscriber.error(err);
-          },
-          complete() {
-            subscriber.complete();
-          },
-        });
-
-      return () => {
-        subscription.unsubscribe();
-        // Clean up all state.
-        // console.log('做多清空状态');
-      };
-    });
-};
-
-// 做空 - 操作符
-export const sellOperator = () => {
-  return (observable: Observable<OperatorInterface>) =>
-    new Observable<string>((subscriber: Subscriber<string>) => {
-      let prev: Prev = '';
-      let isOpen: boolean = false;
-
-      const subscription = observable.subscribe({
-        next({ result, best }) {
-          let info: string = '';
-
-          const [upper, lower] = best;
-          const hist = new Big(result);
-
-          if (hist.gt(upper) && !isOpen && (prev === 'DOWN' || prev === '')) {
-            info = '开空';
-            prev = 'UP';
-            isOpen = true;
-          } else if (
-            hist.lt(lower) &&
-            isOpen &&
-            (prev === 'UP' || prev === '')
-          ) {
-            info = '平多';
-            prev = 'DOWN';
-            isOpen = false;
+          if (!sell.isOpen && info === 3) {
+            // result = sell.profit.gt(0) ? '开空' : '开多';
+            result = '开空';
+            sell.prev = new Big((currKLine as KLineBaseInterface).close);
+            sell.isOpen = true;
+          } else if (sell.isOpen && info !== 1) {
+            // result = sell.profit.gt(0) ? '平多' : '平空';
+            result = '平多';
+            profit = sell.getProfit(
+              result,
+              new Big((currKLine as KLineBaseInterface).close),
+            );
+            sell.profit = profit;
+            sell.isOpen = false;
           }
 
-          if (!!info) {
-            subscriber.next(info);
-          }
+          return of({ result, profit }).pipe(filter((x) => !!x.result));
+        }),
+      );
+
+      const sellSubscriber = sell$.subscribe({
+        next({ result }) {
+          subscriber.next(result);
         },
         error(err) {
           // We need to make sure we're propagating our errors through.
@@ -431,9 +176,12 @@ export const sellOperator = () => {
       });
 
       return () => {
-        subscription.unsubscribe();
+        console.log('makeCuObservable 清空状态');
+        buySubscriber.unsubscribe();
+        sellSubscriber.unsubscribe();
+
         // Clean up all state.
-        // console.log('做空清空状态');
+        currKLine = null!;
       };
     });
 };
