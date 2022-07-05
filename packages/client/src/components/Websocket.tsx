@@ -20,7 +20,8 @@ import useWebSocket, { ReadyState } from 'react-use-websocket';
 
 import { css } from 'linaria';
 
-import { makeCuObservable, makeSuObservable } from '@data-analysis/operators';
+// import { makeCuObservable } from '@data-analysis/operators';
+import { makeCuObservable } from '@data-analysis/operators/src/macd';
 import { timeHuobi } from '@data-analysis/utils';
 
 import { blobInflate } from '../utils/blobInflate';
