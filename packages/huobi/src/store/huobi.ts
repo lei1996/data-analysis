@@ -14,6 +14,14 @@ import {
   concatWith,
   of,
   tap,
+  bufferCount,
+  toArray,
+  pipe,
+  zip,
+  max,
+  min,
+  scan,
+  last,
 } from '@data-analysis/core';
 import {
   HuobiHttpClient,
@@ -32,7 +40,8 @@ import {
   Offset,
 } from '@data-analysis/crypto-huobi/src/types';
 
-import { makeCuObservable } from '@data-analysis/operators/src/nodete';
+import { makeCuObservable } from '@data-analysis/operators/src/macd';
+import { correctionTime } from '@data-analysis/utils';
 
 const orderEnum = {
   多: 'buy',
@@ -274,6 +283,41 @@ interface AutoSwapCrossOrderInterface {
   lever_rate: number;
 }
 
+/**
+ * 合并k线
+ * @param
+ * @returns
+ */
+export const mergeKLine = (interval: number = 15) => {
+  return pipe(
+    bufferCount<KLineInterface>(interval),
+    concatMap((items: KLineInterface[]) => {
+      const source$ = zip(
+        from(items).pipe(max((a, b) => (new Big(a.high).lt(b.high) ? -1 : 1))),
+        from(items).pipe(min((a, b) => (new Big(a.low).lt(b.low) ? -1 : 1))),
+        from(items).pipe(
+          scan((a, b) => a.plus(b.volume), new Big(0)),
+          last(),
+        ),
+      );
+
+      return source$.pipe(
+        map(
+          ([max, min, volume]) =>
+            ({
+              id: items[0].id,
+              open: items[0].open,
+              close: items[items.length - 1].close,
+              high: max.high,
+              low: min.low,
+              volume: volume.toNumber(),
+            } as KLineInterface),
+        ),
+      );
+    }),
+  );
+};
+
 class HuobiStore {
   private huobiServices: HuobiHttpClient;
   private map: Map<string, BaseCoin> = new Map<string, BaseCoin>();
@@ -297,9 +341,10 @@ class HuobiStore {
   }
 
   main() {
-    this.fetchHistoryKlines$(this.symbol, this.interval, 80, 1)
+    this.fetchHistoryKlines$(this.symbol, this.interval, 41, 1, 1, '15min')
       .pipe(
-        tap(x => console.log(x, this.symbol)),
+        mergeKLine(15),
+        tap((x) => console.log(x, this.symbol)),
         makeCuObservable(5),
         concatMap((orderInfo) => {
           console.log(orderInfo, 'debug 在并发任务里面使用concatMap');
@@ -320,11 +365,23 @@ class HuobiStore {
               ? 0
               : openCount;
 
-            console.log(qty, orderInfo, buy.toString(), sell.toString(), '开仓数量 ->');
+            console.log(
+              qty,
+              orderInfo,
+              buy.toString(),
+              sell.toString(),
+              '开仓数量 ->',
+            );
           } else if (orderInfo.includes('平')) {
             qty = new Big(orderInfo.includes('空') ? buy : sell).toNumber();
 
-            console.log(qty, orderInfo, buy.toString(), sell.toString(), '开仓数量 ->');
+            console.log(
+              qty,
+              orderInfo,
+              buy.toString(),
+              sell.toString(),
+              '开仓数量 ->',
+            );
           }
 
           return of({
@@ -369,7 +426,7 @@ class HuobiStore {
       // price: price,
     }).pipe(
       delay(5 * 1000),
-      filter(x => !!x),
+      filter((x) => !!x),
       concatMap((x) => {
         // if (!!!x) {
         //   return this.autoSwapCrossOrder(order);
@@ -421,8 +478,9 @@ class HuobiStore {
    */
   fetchHistoryKline(
     info: MarketHistoryKlineInterface,
+    to?: kLinePeriod,
   ): Observable<KLineInterface> {
-    return this.huobiServices.fetchMarketHistoryKline(info).pipe(
+    const share$ = this.huobiServices.fetchMarketHistoryKline(info).pipe(
       map(({ id, high, low, open, close, vol }) => ({
         id: id * 1000,
         open,
@@ -432,6 +490,19 @@ class HuobiStore {
         volume: vol,
       })),
     );
+
+    if (to === '15min') {
+      return share$.pipe(
+        toArray(),
+        concatMap((items) => {
+          const start = correctionTime(items[0].id);
+
+          return from(items).pipe(filter((x) => x.id >= start * 1000));
+        }),
+      );
+    }
+
+    return share$;
   }
 
   /**
@@ -454,12 +525,16 @@ class HuobiStore {
     size: number = 300,
     offset: number = 14,
     mergeLength: number = 1,
+    to?: kLinePeriod,
   ) {
-    return this.fetchHistoryKline({
-      contract_code,
-      period,
-      size: size * mergeLength + (offset - 1),
-    }).pipe(concatWith(this.wsKlines$(contract_code)));
+    return this.fetchHistoryKline(
+      {
+        contract_code,
+        period,
+        size: size * mergeLength + (offset - 1),
+      },
+      to,
+    ).pipe(concatWith(this.wsKlines$(contract_code)));
   }
 
   /**

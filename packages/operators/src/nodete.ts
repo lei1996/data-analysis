@@ -377,8 +377,6 @@ export const makeCuObservable = (interval: number = 5) => {
 
             if (
               !buy2.isOpen &&
-              profit.gt(0) &&
-              adx.getResult().gt(15) &&
               result.includes('开')
             ) {
               subscriber.next(result);
@@ -397,7 +395,7 @@ export const makeCuObservable = (interval: number = 5) => {
           },
         });
 
-      const buyIsLock2$ = buySource2$.pipe(mergeProfit(4)).subscribe({
+      const buyIsLock2$ = buySource2$.pipe(mergeProfit(2)).subscribe({
         next(sum) {
           buy2.ex.profit = sum;
         },
@@ -442,8 +440,6 @@ export const makeCuObservable = (interval: number = 5) => {
 
             if (
               !sell2.isOpen &&
-              profit.gt(0) &&
-              adx.getResult().gt(15) &&
               result.includes('开')
             ) {
               subscriber.next(result);
@@ -462,7 +458,7 @@ export const makeCuObservable = (interval: number = 5) => {
           },
         });
 
-      const sellIsLock2$ = sellSource2$.pipe(mergeProfit(4)).subscribe({
+      const sellIsLock2$ = sellSource2$.pipe(mergeProfit(2)).subscribe({
         next(sum) {
           sell2.ex.profit = sum;
         },

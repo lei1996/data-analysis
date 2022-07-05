@@ -28,7 +28,7 @@ export const isOverFlowTime = (id: any, minute: number) => {
 };
 
 // 返回当前时间最近的整数时间戳 比如 14：30
-export const correctionTime = ({ timestamp, fator = 15 }: any) => {
+export const correctionTime = (timestamp: number, fator = 15) => {
   const start = moment(+timestamp);
   const remainder = fator - (start.minute() % fator);
 
@@ -124,9 +124,7 @@ export const randomStartEndTime = (
   const timeRandomOffset = interval * ((Math.random() * 100) | 0);
   // 起始时间  基准时间 - 15分钟偏移量 得到一个随机值
   const start = new Big(
-    correctionTime({
-      timestamp: new Big(baseTime).minus(timeRandomOffset).toNumber(),
-    }),
+    correctionTime(new Big(baseTime).minus(timeRandomOffset).toNumber()),
   );
   // 终止时间
   const end = start.plus(((interval / 1000) | 0) * (limit + 13));
