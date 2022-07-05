@@ -341,7 +341,7 @@ class HuobiStore {
   }
 
   main() {
-    this.fetchHistoryKlines$(this.symbol, this.interval, 41, 1, 1, '15min')
+    this.fetchHistoryKlines$(this.symbol, this.interval, 15 * 26, 1, 1, '15min')
       .pipe(
         mergeKLine(15),
         tap((x) => console.log(x, this.symbol)),
