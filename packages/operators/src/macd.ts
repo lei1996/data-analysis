@@ -105,13 +105,13 @@ export const makeCuObservable = (interval: number = 5) => {
           let profit = new Big(0);
 
           if (!buy.isOpen && info === 1) {
-            // result = buy.profit.gt(0) ? '开多' : '开空';
-            result = '开多';
+            result = buy.profit.gt(0) ? '开多' : '开空';
+            // result = '开多';
             buy.prev = new Big((currKLine as KLineBaseInterface).close);
             buy.isOpen = true;
           } else if (buy.isOpen && info !== 1) {
-            // result = buy.profit.gt(0) ? '平空' : '平多';
-            result = '平空';
+            result = buy.profit.gt(0) ? '平空' : '平多';
+            // result = '平空';
             profit = buy.getProfit(
               result,
               new Big((currKLine as KLineBaseInterface).close),
@@ -143,13 +143,13 @@ export const makeCuObservable = (interval: number = 5) => {
           let profit = new Big(0);
 
           if (!sell.isOpen && info === 3) {
-            // result = sell.profit.gt(0) ? '开空' : '开多';
-            result = '开空';
+            result = sell.profit.gt(0) ? '开空' : '开多';
+            // result = '开空';
             sell.prev = new Big((currKLine as KLineBaseInterface).close);
             sell.isOpen = true;
           } else if (sell.isOpen && info !== 1) {
-            // result = sell.profit.gt(0) ? '平多' : '平空';
-            result = '平多';
+            result = sell.profit.gt(0) ? '平多' : '平空';
+            // result = '平多';
             profit = sell.getProfit(
               result,
               new Big((currKLine as KLineBaseInterface).close),
