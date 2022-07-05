@@ -27,6 +27,15 @@ class BaseCs {
   isOpen: boolean = false;
   prev: Big = new Big(0);
   profit: Big = new Big(0);
+  info: number;
+
+  constructor(info: number) {
+    this.info = info;
+  }
+
+  changeInfo() {
+    this.info = 3 - this.info;
+  }
 
   getProfit(info: string, price: Big) {
     if (this.prev.eq(0)) return new Big(0);
@@ -45,8 +54,8 @@ export const makeCuObservable = (interval: number = 5) => {
   return (observable: Observable<KLineBaseInterface>) =>
     new Observable<string>((subscriber: Subscriber<string>) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
-      const buy = new BaseCs();
-      const sell = new BaseCs();
+      const buy = new BaseCs(1);
+      const sell = new BaseCs(2);
 
       const main$ = observable.pipe(
         tap((curr) => {
@@ -105,18 +114,21 @@ export const makeCuObservable = (interval: number = 5) => {
           let profit = new Big(0);
 
           if (!buy.isOpen && info === 1) {
-            result = buy.profit.gt(0) ? '开多' : '开空';
+            result = buy.info === 1 ? '开多' : '开空';
             // result = '开多';
             buy.prev = new Big((currKLine as KLineBaseInterface).close);
             buy.isOpen = true;
-          } else if (buy.isOpen && info !== 1) {
-            result = buy.profit.gt(0) ? '平空' : '平多';
+          } else if (buy.isOpen && info !== 3) {
+            result = buy.info === 1 ? '平空' : '平多';
             // result = '平空';
             profit = buy.getProfit(
               result,
               new Big((currKLine as KLineBaseInterface).close),
             );
             buy.profit = profit;
+            if (profit.lt(0)) {
+              buy.changeInfo();
+            }
             buy.isOpen = false;
           }
 
@@ -143,18 +155,21 @@ export const makeCuObservable = (interval: number = 5) => {
           let profit = new Big(0);
 
           if (!sell.isOpen && info === 3) {
-            result = sell.profit.gt(0) ? '开空' : '开多';
+            result = sell.info === 2 ? '开空' : '开多';
             // result = '开空';
             sell.prev = new Big((currKLine as KLineBaseInterface).close);
             sell.isOpen = true;
           } else if (sell.isOpen && info !== 1) {
-            result = sell.profit.gt(0) ? '平多' : '平空';
+            result = sell.info === 2 ? '平多' : '平空';
             // result = '平多';
             profit = sell.getProfit(
               result,
               new Big((currKLine as KLineBaseInterface).close),
             );
             sell.profit = profit;
+            if (profit.lt(0)) {
+              sell.changeInfo();
+            }
             sell.isOpen = false;
           }
 
