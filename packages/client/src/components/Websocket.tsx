@@ -172,7 +172,7 @@ function WebSocketDemo() {
       chartRef.current.createTechnicalIndicator(
         {
           name: 'MACD',
-          calcParams: [13, 34, 9],
+          calcParams: [12, 26, 9],
         },
         false,
         {
