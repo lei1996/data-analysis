@@ -11,6 +11,14 @@ import {
   zip,
   skip,
   tap,
+  pipe,
+  bufferCount,
+  from,
+  max,
+  min,
+  scan,
+  last,
+  combineLatest,
 } from '@data-analysis/core';
 
 import { MACD, EMA, ADX } from 'rxjs-trading-signals';
@@ -23,6 +31,42 @@ interface KLineBaseInterface {
   high: BigSource; // 最高价
   volume: BigSource; // 成交量
 }
+
+/**
+ * 合并k线
+ * @param
+ * @returns
+ */
+export const mergeKLine = (interval: number = 15) => {
+  return pipe(
+    bufferCount<KLineBaseInterface>(interval),
+    concatMap((items: KLineBaseInterface[]) => {
+      const source$ = zip(
+        from(items).pipe(max((a, b) => (new Big(a.high).lt(b.high) ? -1 : 1))),
+        from(items).pipe(min((a, b) => (new Big(a.low).lt(b.low) ? -1 : 1))),
+        from(items).pipe(
+          scan((a, b) => a.plus(b.volume), new Big(0)),
+          last(),
+        ),
+      );
+
+      return source$.pipe(
+        map(
+          ([max, min, volume]) =>
+            ({
+              id: items[0].id,
+              open: items[0].open,
+              close: items[items.length - 1].close,
+              high: max.high,
+              low: min.low,
+              volume: volume.toNumber(),
+            } as KLineBaseInterface),
+        ),
+      );
+    }),
+  );
+};
+
 class BaseCs {
   isOpen: boolean = false;
   prev: Big = new Big(0);
@@ -58,17 +102,19 @@ export const makeCuObservable = (interval: number = 5) => {
       );
 
       const macd$ = main$.pipe(
+        mergeKLine(15),
         map(({ close }) => new Big(close)),
         MACD({
           indicator: EMA,
-          shortInterval: 12,
-          longInterval: 26,
+          shortInterval: 6,
+          longInterval: 13,
           signalInterval: 9,
         }),
         skip(1),
       );
 
       const adx$ = main$.pipe(
+        mergeKLine(15 * 4),
         map(({ close, high, low }) => ({ close, high, low })),
         ADX(14),
       );
@@ -81,7 +127,7 @@ export const makeCuObservable = (interval: number = 5) => {
       //   console.log(new Big(x).round(8).toString(), 'adx value ->'),
       // );
 
-      const source$ = zip(macd$.pipe(), adx$.pipe()).pipe(
+      const source$ = combineLatest(macd$.pipe(), adx$.pipe()).pipe(
         concatMap(([macd, adx]) => {
           const { histogram } = macd;
           let info = 0;
@@ -105,7 +151,7 @@ export const makeCuObservable = (interval: number = 5) => {
         concatMap(({ info, adx }) => {
           let result = '';
           let profit = new Big(0);
-          if (buy.isOpen) buy.count++;
+          // if (buy.isOpen) buy.count++;
 
           if (
             !buy.isOpen &&
@@ -116,14 +162,14 @@ export const makeCuObservable = (interval: number = 5) => {
             result = '开多';
             buy.prev = new Big((currKLine as KLineBaseInterface).close);
             buy.isOpen = true;
-          } else if (buy.isOpen && (buy.count >= 5 || info !== 1)) {
+          } else if (buy.isOpen && info !== 1) {
             result = '平空';
             profit = buy.getProfit(
               result,
               new Big((currKLine as KLineBaseInterface).close),
             );
             buy.profit = profit;
-            buy.count = 0;
+            // buy.count = 0;
             buy.isOpen = false;
           }
 
@@ -150,7 +196,7 @@ export const makeCuObservable = (interval: number = 5) => {
         concatMap(({ info, adx }) => {
           let result = '';
           let profit = new Big(0);
-          if (sell.isOpen) sell.count++;
+          // if (sell.isOpen) sell.count++;
 
           if (
             !sell.isOpen &&
@@ -161,14 +207,14 @@ export const makeCuObservable = (interval: number = 5) => {
             result = '开空';
             sell.prev = new Big((currKLine as KLineBaseInterface).close);
             sell.isOpen = true;
-          } else if (sell.isOpen && (sell.count >= 5 || info !== 3)) {
+          } else if (sell.isOpen && info !== 3) {
             result = '平多';
             profit = sell.getProfit(
               result,
               new Big((currKLine as KLineBaseInterface).close),
             );
             sell.profit = profit;
-            sell.count = 0;
+            // sell.count = 0;
             sell.isOpen = false;
           }
 
