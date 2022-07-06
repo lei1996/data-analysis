@@ -341,9 +341,9 @@ class HuobiStore {
   }
 
   main() {
-    this.fetchHistoryKlines$(this.symbol, this.interval, 15 * 26, 1, 1, '15min')
+    this.fetchHistoryKlines$(this.symbol, this.interval, 15 * 26, 1)
       .pipe(
-        mergeKLine(15),
+        // mergeKLine(15),
         tap((x) => console.log(x, this.symbol)),
         makeCuObservable(5),
         concatMap((orderInfo) => {
