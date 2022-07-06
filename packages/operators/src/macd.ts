@@ -96,18 +96,23 @@ export const makeCuObservable = (interval: number = 5) => {
 
           console.log(info, new Big(adx).round(8).toString(), 'adx ->');
 
-          return of(info).pipe(filter((x) => !!x));
+          return of({ info, adx }).pipe(filter((x) => !!x.info));
         }),
         share(),
       );
 
       const buy$ = source$.pipe(
-        concatMap((info) => {
+        concatMap(({ info, adx }) => {
           let result = '';
           let profit = new Big(0);
           if (buy.isOpen) buy.count++;
 
-          if (!buy.isOpen && info === 1 && buy.prevInfo !== 1) {
+          if (
+            !buy.isOpen &&
+            info === 1 &&
+            buy.prevInfo !== 1 &&
+            new Big(adx).gt(25)
+          ) {
             result = '开多';
             buy.prev = new Big((currKLine as KLineBaseInterface).close);
             buy.isOpen = true;
@@ -142,12 +147,17 @@ export const makeCuObservable = (interval: number = 5) => {
       });
 
       const sell$ = source$.pipe(
-        concatMap((info) => {
+        concatMap(({ info, adx }) => {
           let result = '';
           let profit = new Big(0);
           if (sell.isOpen) sell.count++;
 
-          if (!sell.isOpen && info === 3 && sell.prevInfo !== 3) {
+          if (
+            !sell.isOpen &&
+            info === 3 &&
+            sell.prevInfo !== 3 &&
+            new Big(adx).gt(25)
+          ) {
             result = '开空';
             sell.prev = new Big((currKLine as KLineBaseInterface).close);
             sell.isOpen = true;
