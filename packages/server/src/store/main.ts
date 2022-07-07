@@ -1,4 +1,4 @@
-import { makeSuObservable } from '@data-analysis/operators/src/macd';
+import { makeCuObservable } from '@data-analysis/operators/src/macd';
 import {
   defer,
   concatMap,
@@ -13,11 +13,14 @@ import {
   tap,
   groupBy,
   mergeMap,
+  take,
+  filter,
 } from '@data-analysis/core';
 import axios from '@data-analysis/utils/axios';
+import { correctionTime } from '@data-analysis/utils';
 import { spliceURL } from '@data-analysis/utils/spliceURL';
 import { timeHuobi } from '@data-analysis/utils/time';
-import { makeCuObservable } from '@data-analysis/operators';
+// import { makeCuObservable } from '@data-analysis/operators';
 
 interface KLineParamsInterface {
   symbol: string; // 交易对
@@ -39,7 +42,7 @@ interface KLineInterface {
 class MainStore {
   // 当前交易对的配置信息
   currTard: KLineParamsInterface = {
-    symbol: 'BTC-USDT',
+    symbol: 'LINK-USDT',
     interval: '1min',
     limit: '300',
   };
@@ -52,133 +55,286 @@ class MainStore {
     console.log('hello');
     let kline: any = {};
     const { symbol, interval, limit = '' } = this.currTard;
-    this.fetchKLine({
-      symbol,
-      interval,
-      // startTime: '1636449600',
-      // endTime: '1636467600',
-      limit,
-    })
+    this.fetchExchangeInfo()
       .pipe(
-        concatMap((item) => {
-          const result = [];
-          let rightTimestamp = new Big(item[0].id)
-            .times(1000)
-            .minus(new Big(1).times(timeHuobi[interval]).times(1000))
-            .toString();
-
-          for (let i = 0; i < 50; i++) {
-            const startTime = new Big(rightTimestamp)
-              .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
-              .toString();
-
-            result.push({
-              startTime: startTime,
-              endTime: rightTimestamp,
-            });
-
-            rightTimestamp = new Big(startTime)
-              .minus(new Big(1).times(timeHuobi[interval]).times(1000))
-              .toString();
-          }
-
-          console.log(result, '请求时间戳数组 ->');
-
-          return from(result).pipe(
-            concatMap(({ startTime, endTime }) =>
-              this.fetchKLine({
-                symbol: symbol,
-                interval: interval,
-                startTime: (+startTime / 1000).toString(),
-                endTime: (+endTime / 1000).toString(),
-              }),
-            ),
-            reduce((curr, next) => [...next, ...curr], [] as KLineInterface[]),
-            map((curr) => [...curr, ...item]),
-          );
-        }),
-        concatMap((item) =>
-          from(item).pipe(
-            delay(5),
-            map(({ id, open, close, high, low, vol }: any) => ({
-              id: id * 1000,
-              open,
-              close,
-              high,
-              low,
-              volume: vol,
-            })),
-            tap((x) => (kline = x)),
-            makeCuObservable(5),
-            concatMap((info: string) =>
-              of({
-                id: kline.id,
-                info,
-                close: kline.close,
-                high: kline.high,
-                low: kline.low,
-              }),
-            ),
-          ),
+        concatMap((items) =>
+          from(items).pipe(map((x: any) => x.contract_code)),
         ),
-        groupBy(({ info }) => info === '开多' || info === '平空'),
-        mergeMap((group$) =>
-          group$.pipe(
-            reduce(
-              (acc, cur) => [...acc, cur],
-              [] as {
-                id: any;
-                info: string;
-                close: any;
-                high: any;
-                low: any;
-              }[],
-            ),
-          ),
-        ),
-        // tap(x => console.log(x, '分组数据')),
-        concatMap((items) => {
-          const obj = {
-            sum: new Big(0),
-            sumLists: [] as string[],
-            prev: new Big(0),
-            isOpen: false
-          };
+        take(1),
+        concatMap((symbol) => {
+          return this.fetchKLine({
+            symbol,
+            interval,
+            // startTime: '1636449600',
+            // endTime: '1636467600',
+            limit,
+          }).pipe(
+            concatMap((item) => {
+              const result = [];
+              let rightTimestamp = new Big(item[0].id)
+                .times(1000)
+                .minus(new Big(1).times(timeHuobi[interval]).times(1000))
+                .toString();
 
-          let dir = '';
+              for (let i = 0; i < 100; i++) {
+                const startTime = new Big(rightTimestamp)
+                  .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
+                  .toString();
 
-          for (const item of items) {
-            const { info, close } = item;
+                result.push({
+                  startTime: startTime,
+                  endTime: rightTimestamp,
+                });
 
-            if (!obj.isOpen && info.includes('开')) {
-              obj.prev = new Big(close);
-              obj.isOpen = true;
-            } else if (obj.isOpen && info.includes('平')) {
-              dir = info.includes('空') ? 'buy' : 'sell';
+                rightTimestamp = new Big(startTime)
+                  .minus(new Big(1).times(timeHuobi[interval]).times(1000))
+                  .toString();
+              }
 
-              obj.sum = obj.sum.plus(
-                info.includes('空')
-                  ? new Big(close).minus(obj.prev)
-                  : new Big(obj.prev).minus(close),
+              console.log(result, '请求时间戳数组 ->');
+
+              return from(result).pipe(
+                concatMap(({ startTime, endTime }) =>
+                  this.fetchKLine({
+                    symbol: symbol,
+                    interval: interval,
+                    startTime: (+startTime / 1000).toString(),
+                    endTime: (+endTime / 1000).toString(),
+                  }),
+                ),
+                reduce(
+                  (curr, next) => [...next, ...curr],
+                  [] as KLineInterface[],
+                ),
+                map((curr) => [...curr, ...item]),
               );
-              obj.sumLists.push(obj.sum.toString());
+            }),
+            concatMap((items) => {
+              const start = correctionTime(items[0].id * 1000) + 7 * 60;
 
-              obj.isOpen = false;
-            }
-          }
+              return from(items).pipe(
+                delay(5),
+                filter(({ id }) => id >= start),
+                map(({ id, open, close, high, low, vol }: any) => ({
+                  id: id * 1000,
+                  open,
+                  close,
+                  high,
+                  low,
+                  volume: vol,
+                })),
+                tap((x) => (kline = x)),
+                makeCuObservable(5),
+                concatMap((info: string) =>
+                  of({
+                    id: kline.id,
+                    info,
+                    close: kline.close,
+                    high: kline.high,
+                    low: kline.low,
+                  }),
+                ),
+              );
+            }),
+            groupBy(({ info }) => info === '开多' || info === '平空'),
+            mergeMap((group$) =>
+              group$.pipe(
+                reduce(
+                  (acc, cur) => [...acc, cur],
+                  [] as {
+                    id: any;
+                    info: string;
+                    close: any;
+                    high: any;
+                    low: any;
+                  }[],
+                ),
+              ),
+            ),
+            // tap(x => console.log(x, '分组数据')),
+            concatMap((items) => {
+              const obj = {
+                sum: new Big(0),
+                sumLists: [] as string[],
+                prev: new Big(0),
+                isOpen: false,
+              };
 
-          return of({ sum: obj.sum, sumLists: obj.sumLists, info: dir });
+              let dir = '';
+
+              for (const item of items) {
+                const { info, close } = item;
+
+                if (!obj.isOpen && info.includes('开')) {
+                  obj.prev = new Big(close);
+                  obj.isOpen = true;
+                } else if (obj.isOpen && info.includes('平')) {
+                  dir = info.includes('空') ? 'buy' : 'sell';
+
+                  obj.sum = obj.sum.plus(
+                    info.includes('空')
+                      ? new Big(close).minus(obj.prev)
+                      : new Big(obj.prev).minus(close),
+                  );
+                  obj.sumLists.push(obj.sum.toString());
+
+                  obj.isOpen = false;
+                }
+              }
+
+              return of({ sum: obj.sum, sumLists: obj.sumLists, info: dir });
+            }),
+          );
         }),
       )
       .subscribe(({ info, sum, sumLists }) =>
-        console.log(info, sum.toString(), JSON.stringify(sumLists), 'x -> 分组数据'),
+        console.log(
+          info,
+          sum.toString(),
+          JSON.stringify(sumLists),
+          'x -> 分组数据',
+        ),
       );
+    // this.fetchKLine({
+    //   symbol,
+    //   interval,
+    //   // startTime: '1636449600',
+    //   // endTime: '1636467600',
+    //   limit,
+    // })
+    //   .pipe(
+    //     concatMap((item) => {
+    //       const result = [];
+    //       let rightTimestamp = new Big(item[0].id)
+    //         .times(1000)
+    //         .minus(new Big(1).times(timeHuobi[interval]).times(1000))
+    //         .toString();
+
+    //       for (let i = 0; i < 100; i++) {
+    //         const startTime = new Big(rightTimestamp)
+    //           .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
+    //           .toString();
+
+    //         result.push({
+    //           startTime: startTime,
+    //           endTime: rightTimestamp,
+    //         });
+
+    //         rightTimestamp = new Big(startTime)
+    //           .minus(new Big(1).times(timeHuobi[interval]).times(1000))
+    //           .toString();
+    //       }
+
+    //       console.log(result, '请求时间戳数组 ->');
+
+    //       return from(result).pipe(
+    //         concatMap(({ startTime, endTime }) =>
+    //           this.fetchKLine({
+    //             symbol: symbol,
+    //             interval: interval,
+    //             startTime: (+startTime / 1000).toString(),
+    //             endTime: (+endTime / 1000).toString(),
+    //           }),
+    //         ),
+    //         reduce((curr, next) => [...next, ...curr], [] as KLineInterface[]),
+    //         map((curr) => [...curr, ...item]),
+    //       );
+    //     }),
+    //     concatMap((item) =>
+    //       from(item).pipe(
+    //         delay(5),
+    //         map(({ id, open, close, high, low, vol }: any) => ({
+    //           id: id * 1000,
+    //           open,
+    //           close,
+    //           high,
+    //           low,
+    //           volume: vol,
+    //         })),
+    //         tap((x) => (kline = x)),
+    //         makeCuObservable(5),
+    //         concatMap((info: string) =>
+    //           of({
+    //             id: kline.id,
+    //             info,
+    //             close: kline.close,
+    //             high: kline.high,
+    //             low: kline.low,
+    //           }),
+    //         ),
+    //       ),
+    //     ),
+    //     groupBy(({ info }) => info === '开多' || info === '平空'),
+    //     mergeMap((group$) =>
+    //       group$.pipe(
+    //         reduce(
+    //           (acc, cur) => [...acc, cur],
+    //           [] as {
+    //             id: any;
+    //             info: string;
+    //             close: any;
+    //             high: any;
+    //             low: any;
+    //           }[],
+    //         ),
+    //       ),
+    //     ),
+    //     // tap(x => console.log(x, '分组数据')),
+    //     concatMap((items) => {
+    //       const obj = {
+    //         sum: new Big(0),
+    //         sumLists: [] as string[],
+    //         prev: new Big(0),
+    //         isOpen: false,
+    //       };
+
+    //       let dir = '';
+
+    //       for (const item of items) {
+    //         const { info, close } = item;
+
+    //         if (!obj.isOpen && info.includes('开')) {
+    //           obj.prev = new Big(close);
+    //           obj.isOpen = true;
+    //         } else if (obj.isOpen && info.includes('平')) {
+    //           dir = info.includes('空') ? 'buy' : 'sell';
+
+    //           obj.sum = obj.sum.plus(
+    //             info.includes('空')
+    //               ? new Big(close).minus(obj.prev)
+    //               : new Big(obj.prev).minus(close),
+    //           );
+    //           obj.sumLists.push(obj.sum.toString());
+
+    //           obj.isOpen = false;
+    //         }
+    //       }
+
+    //       return of({ sum: obj.sum, sumLists: obj.sumLists, info: dir });
+    //     }),
+    //   )
+    //   .subscribe(({ info, sum, sumLists }) =>
+    //     console.log(
+    //       info,
+    //       sum.toString(),
+    //       JSON.stringify(sumLists),
+    //       'x -> 分组数据',
+    //     ),
+    //   );
   }
 
   fetchKLine(kline: KLineParamsInterface): Observable<KLineInterface[]> {
     return defer(() =>
       axios
         .get(`https://vsweb.linairx.top/api/kline/huobi${spliceURL(kline)}`)
+        .then((x) => x.data),
+    );
+  }
+
+  fetchExchangeInfo(): Observable<any[]> {
+    return defer(() =>
+      axios
+        .get(`https://vsweb.linairx.top/api/exchangeInfo/huobi`)
         .then((x) => x.data),
     );
   }
