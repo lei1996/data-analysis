@@ -20,6 +20,7 @@ import {
   last,
   combineLatest,
 } from '@data-analysis/core';
+import { getNowTime } from '@data-analysis/utils';
 
 import { MACD, EMA, ADX } from 'rxjs-trading-signals';
 
@@ -181,6 +182,8 @@ export const makeCuObservable = (interval: number = 5) => {
 
       const buySubscriber = buy$.subscribe({
         next({ result }) {
+          console.log(`buy: ${result}. time: ${getNowTime((currKLine as KLineBaseInterface).id)}`);
+          
           subscriber.next(result);
         },
         error(err) {
@@ -226,6 +229,8 @@ export const makeCuObservable = (interval: number = 5) => {
 
       const sellSubscriber = sell$.subscribe({
         next({ result }) {
+          console.log(`sell: ${result}. time: ${getNowTime((currKLine as KLineBaseInterface).id)}`);
+
           subscriber.next(result);
         },
         error(err) {
