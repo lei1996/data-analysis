@@ -491,18 +491,14 @@ class HuobiStore {
       })),
     );
 
-    if (to === '15min') {
-      return share$.pipe(
-        toArray(),
-        concatMap((items) => {
-          const start = correctionTime(items[0].id);
+    return share$.pipe(
+      toArray(),
+      concatMap((items) => {
+        const start = correctionTime(items[0].id) + 7 * 60;
 
-          return from(items).pipe(filter((x) => x.id >= start * 1000));
-        }),
-      );
-    }
-
-    return share$;
+        return from(items).pipe(filter((x) => x.id >= start * 1000));
+      }),
+    );
   }
 
   /**
