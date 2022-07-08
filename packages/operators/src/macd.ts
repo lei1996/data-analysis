@@ -21,7 +21,7 @@ import {
   combineLatest,
 } from '@data-analysis/core';
 import { getNowTime } from '@data-analysis/utils';
-
+import { divideEquallyRx } from '@data-analysis/core/src/divideEqually';
 import { MACD, EMA, ADX } from 'rxjs-trading-signals';
 
 interface KLineBaseInterface {
@@ -112,12 +112,37 @@ export const makeCuObservable = (interval: number = 5) => {
           signalInterval: 9,
         }),
         skip(1),
+        share(),
       );
 
       const adx$ = main$.pipe(
         mergeKLine(15 * 4),
         map(({ close, high, low }) => ({ close, high, low })),
         ADX(14),
+      );
+
+      const maxmin$ = macd$.pipe(
+        map(({ histogram }) => histogram),
+        bufferCount(50, 10),
+        filter((x) => x.length === 50),
+        concatMap((items) => {
+          return zip(
+            from(items).pipe(max((a, b) => (a.lt(b) ? -1 : 1))),
+            from(items).pipe(min((a, b) => (a.lt(b) ? -1 : 1))),
+          ).pipe(
+            concatMap(([max, min]) => {
+              return zip(
+                divideEquallyRx(0, max, 10),
+                divideEquallyRx(min, 0, 10),
+              ).pipe(
+                map(([max, min]) => ({
+                  buy: max[max.length - 2],
+                  sell: min[1],
+                })),
+              );
+            }),
+          );
+        }),
       );
 
       // macd$.subscribe((x) =>
@@ -128,20 +153,22 @@ export const makeCuObservable = (interval: number = 5) => {
       //   console.log(new Big(x).round(8).toString(), 'adx value ->'),
       // );
 
-      const source$ = combineLatest(macd$.pipe(), adx$.pipe()).pipe(
-        concatMap(([macd, adx]) => {
+      maxmin$.subscribe((x) => console.log(x, '最大最小值'));
+
+      const source$ = combineLatest(macd$, adx$, maxmin$).pipe(
+        concatMap(([macd, adx, { buy, sell }]) => {
           const { histogram } = macd;
           let info = 0;
 
-          if (histogram.gt(0)) {
+          if (histogram.gt(buy)) {
             info = 1;
-          } else if (histogram.eq(0)) {
-            info = 2;
-          } else {
+          } else if (histogram.lt(sell)) {
             info = 3;
+          } else {
+            info = 2;
           }
 
-          console.log(info, new Big(adx).round(8).toString(), 'adx ->');
+          // console.log(info, new Big(adx).round(8).toString(), 'adx ->');
 
           return of({ info, adx }).pipe(filter((x) => !!x.info));
         }),
@@ -182,8 +209,12 @@ export const makeCuObservable = (interval: number = 5) => {
 
       const buySubscriber = buy$.subscribe({
         next({ result }) {
-          console.log(`buy: ${result}. time: ${getNowTime((currKLine as KLineBaseInterface).id)}`);
-          
+          console.log(
+            `buy: ${result}. time: ${getNowTime(
+              (currKLine as KLineBaseInterface).id,
+            )}`,
+          );
+
           subscriber.next(result);
         },
         error(err) {
@@ -229,7 +260,11 @@ export const makeCuObservable = (interval: number = 5) => {
 
       const sellSubscriber = sell$.subscribe({
         next({ result }) {
-          console.log(`sell: ${result}. time: ${getNowTime((currKLine as KLineBaseInterface).id)}`);
+          console.log(
+            `sell: ${result}. time: ${getNowTime(
+              (currKLine as KLineBaseInterface).id,
+            )}`,
+          );
 
           subscriber.next(result);
         },
