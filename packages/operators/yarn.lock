@@ -2,29 +2,18 @@
 # yarn lockfile v1
 
 
-"@types/big.js@6.1.3":
-  version "6.1.3"
-  resolved "https://registry.yarnpkg.com/@types/big.js/-/big.js-6.1.3.tgz#c008dec4dae24c7a338ebb4521c46e9609020807"
-  integrity sha512-fHh2h1cFlvGP0kFCqoAsnuQoM0n3xHB6HxgZvELt7dji+BtK/j938MRL0nG5AA45EgibuFcPjgLlkqfUPCyoKw==
-
-big.js@6.1.1:
-  version "6.1.1"
-  resolved "https://registry.yarnpkg.com/big.js/-/big.js-6.1.1.tgz#63b35b19dc9775c94991ee5db7694880655d5537"
-  integrity sha512-1vObw81a8ylZO5ePrtMay0n018TcftpTA5HFKDaSuiUDBo8biRBtjIobw60OpwuvrGk+FsxKamqN4cnmj/eXdg==
-
 big.js@6.2.0:
   version "6.2.0"
   resolved "https://registry.yarnpkg.com/big.js/-/big.js-6.2.0.tgz#39c60822aecb0f34a1d79a90fe9908a0ddf45e1d"
   integrity sha512-paIKvJiAaOYdLt6MfnvxkDo64lTOV257XYJyX3oJnJQocIclUn+48k6ZerH/c5FxWE6DGJu1TKDYis7tqHg9kg==
 
-rxjs-trading-signals@^0.2.2:
-  version "0.2.2"
-  resolved "https://registry.yarnpkg.com/rxjs-trading-signals/-/rxjs-trading-signals-0.2.2.tgz#5a0cafcc37772a31bb083a3f1b804c9061fbb501"
-  integrity sha512-PXbpYbnewRTeZOJ9cqbhpRe6BN0j+V9nBvISjuTbpxSvqWZl7ORNyzPn0kP44BxkXXVseGFAX1rjD5yZzGkrkA==
+rxjs-trading-signals@^0.3.0:
+  version "0.3.0"
+  resolved "https://registry.yarnpkg.com/rxjs-trading-signals/-/rxjs-trading-signals-0.3.0.tgz#4b56cbb9bc35fdf4f889592decec0133534044a0"
+  integrity sha512-+yUnD/Vy+5e6HxZkq/WChTk70c/A0aOexBveIJLBLMIMVoT9WpgCr1qoeCngONBBJk2cWOjcBhwxvz2UQJWzEQ==
   dependencies:
     big.js "6.2.0"
     rxjs "7.5.5"
-    trading-signals "3.6.1"
 
 rxjs@7.5.5:
   version "7.5.5"
@@ -32,14 +21,6 @@ rxjs@7.5.5:
   integrity sha512-sy+H0pQofO95VDmFLzyaw9xNJU4KTRSwQIGM6+iG3SypAtCiLDzpeG8sJrNCWn2Up9km+KhkvTdbkrdy+yzZdw==
   dependencies:
     tslib "^2.1.0"
-
-trading-signals@3.6.1:
-  version "3.6.1"
-  resolved "https://registry.yarnpkg.com/trading-signals/-/trading-signals-3.6.1.tgz#3db3bc46e32ed262b694550c5aa1d5857c90cfa6"
-  integrity sha512-NE7Oa+q6qL5t8Zn+4rn8zXyLtOeEUE0rr5l6RBvj4W1t/w+1DLTulFK67tzOM7JXemzZsdx6ZNDOnNtccDz04Q==
-  dependencies:
-    "@types/big.js" "6.1.3"
-    big.js "6.1.1"
 
 tslib@^2.1.0:
   version "2.4.0"
