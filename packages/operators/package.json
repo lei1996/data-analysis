@@ -7,6 +7,6 @@
     "@data-analysis/core": "^1.0.0",
     "@data-analysis/types": "^1.0.0",
     "@data-analysis/utils": "^1.0.0",
-    "rxjs-trading-signals": "^0.2.2"
+    "rxjs-trading-signals": "^0.3.0"
   }
 }
