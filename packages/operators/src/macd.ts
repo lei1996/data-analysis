@@ -88,7 +88,11 @@ class BaseCs {
   }
 }
 
-export const makeCuObservable = (interval: number = 5) => {
+export const makeCuObservable = (
+  shortInterval: number = 6,
+  longInterval: number = 13,
+  signalInterval: number = 9,
+) => {
   return (observable: Observable<KLineBaseInterface>) =>
     new Observable<string>((subscriber: Subscriber<string>) => {
       let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
@@ -107,9 +111,9 @@ export const makeCuObservable = (interval: number = 5) => {
         map(({ close }) => new Big(close)),
         MACD({
           indicator: EMA,
-          shortInterval: 6,
-          longInterval: 13,
-          signalInterval: 9,
+          shortInterval,
+          longInterval,
+          signalInterval,
         }),
         skip(1),
         share(),
@@ -136,8 +140,8 @@ export const makeCuObservable = (interval: number = 5) => {
                 divideEquallyRx(min, 0, 10),
               ).pipe(
                 map(([max, min]) => ({
-                  buy: max[max.length - 2],
-                  sell: min[1],
+                  buy: max[max.length - 1],
+                  sell: min[0],
                 })),
               );
             }),
@@ -168,7 +172,7 @@ export const makeCuObservable = (interval: number = 5) => {
             info = 2;
           }
 
-          // console.log(info, new Big(adx).round(8).toString(), 'adx ->');
+          console.log(info, new Big(adx).round(8).toString(), 'adx ->');
 
           return of({ info, adx }).pipe(filter((x) => !!x.info));
         }),

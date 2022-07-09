@@ -341,11 +341,11 @@ class HuobiStore {
   }
 
   main() {
-    this.fetchHistoryKlines$(this.symbol, this.interval, 1620, 1)
+    this.fetchHistoryKlines$(this.symbol, this.interval, 1650, 1)
       .pipe(
         // mergeKLine(15),
         tap((x) => console.log(x, this.symbol)),
-        makeCuObservable(5),
+        makeCuObservable(),
         concatMap((orderInfo) => {
           console.log(orderInfo, 'debug 在并发任务里面使用concatMap');
           const [a, b] = orderInfo.split('');
@@ -414,11 +414,11 @@ class HuobiStore {
     // bids: 买盘, asks: 卖盘
     const { bids, asks } = map.depth;
 
-    const price = (
-      order.direction === 'buy' ? bids[0][0] : asks[0][0]
-    ).toString();
+    // const price = (
+    //   order.direction === 'buy' ? bids[0][0] : asks[0][0]
+    // ).toString();
 
-    console.log(price, order, 'meker 挂单价格 ->');
+    console.log(order, 'meker 挂单价格 ->');
 
     return this.fetchSwapCrossOrder({
       ...order,
