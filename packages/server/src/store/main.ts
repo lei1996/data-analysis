@@ -16,6 +16,10 @@ import {
   take,
   filter,
   share,
+  scan,
+  last,
+  max,
+  zip,
 } from '@data-analysis/core';
 import axios from '@data-analysis/utils/axios';
 import { correctionTime } from '@data-analysis/utils';
@@ -143,87 +147,94 @@ class MainStore {
 
               return from(result).pipe(
                 concatMap(({ short, long, si }) => {
-                  return source$.pipe(
-                    tap((x) => (kline = x)),
-                    makeCuObservable(short, long, si),
-                    concatMap((info: string) =>
-                      of({
-                        id: kline.id,
-                        info,
-                        close: kline.close,
-                        high: kline.high,
-                        low: kline.low,
-                      }),
-                    ),
-                    groupBy(({ info }) => info === '开多' || info === '平空'),
-                    mergeMap((group$) =>
-                      group$.pipe(
-                        reduce(
-                          (acc, cur) => [...acc, cur],
-                          [] as {
-                            id: any;
-                            info: string;
-                            close: any;
-                            high: any;
-                            low: any;
-                          }[],
+                  return zip(
+                    of([short, long, si]),
+                    source$.pipe(
+                      tap((x) => (kline = x)),
+                      makeCuObservable(short, long, si),
+                      concatMap((info: string) =>
+                        of({
+                          id: kline.id,
+                          info,
+                          close: kline.close,
+                          high: kline.high,
+                          low: kline.low,
+                        }),
+                      ),
+                      groupBy(({ info }) => info === '开多' || info === '平空'),
+                      mergeMap((group$) =>
+                        group$.pipe(
+                          reduce(
+                            (acc, cur) => [...acc, cur],
+                            [] as {
+                              id: any;
+                              info: string;
+                              close: any;
+                              high: any;
+                              low: any;
+                            }[],
+                          ),
                         ),
                       ),
-                    ),
-                    // tap(x => console.log(x, '分组数据')),
-                    concatMap((items) => {
-                      const obj = {
-                        sum: new Big(0),
-                        sumLists: [] as string[],
-                        prev: new Big(0),
-                        isOpen: false,
-                      };
+                      // tap(x => console.log(x, '分组数据')),
+                      concatMap((items) => {
+                        const obj = {
+                          sum: new Big(0),
+                          sumLists: [] as string[],
+                          prev: new Big(0),
+                          isOpen: false,
+                        };
 
-                      let dir = '';
+                        let dir = '';
 
-                      for (const item of items) {
-                        const { info, close } = item;
+                        for (const item of items) {
+                          const { info, close } = item;
 
-                        if (!obj.isOpen && info.includes('开')) {
-                          obj.prev = new Big(close);
-                          obj.isOpen = true;
-                        } else if (obj.isOpen && info.includes('平')) {
-                          dir = info.includes('空') ? 'buy' : 'sell';
+                          if (!obj.isOpen && info.includes('开')) {
+                            obj.prev = new Big(close);
+                            obj.isOpen = true;
+                          } else if (obj.isOpen && info.includes('平')) {
+                            dir = info.includes('空') ? 'buy' : 'sell';
 
-                          obj.sum = obj.sum.plus(
-                            info.includes('空')
-                              ? new Big(close).minus(obj.prev)
-                              : new Big(obj.prev).minus(close),
-                          );
-                          obj.sumLists.push(obj.sum.toString());
+                            obj.sum = obj.sum.plus(
+                              info.includes('空')
+                                ? new Big(close).minus(obj.prev)
+                                : new Big(obj.prev).minus(close),
+                            );
+                            obj.sumLists.push(obj.sum.toString());
 
-                          obj.isOpen = false;
+                            obj.isOpen = false;
+                          }
                         }
-                      }
 
-                      return of({
-                        sum: obj.sum,
-                        sumLists: obj.sumLists,
-                        info: dir,
-                        macd: [short, long, si],
-                      });
-                    }),
+                        return of({
+                          sum: obj.sum,
+                          sumLists: obj.sumLists,
+                          info: dir,
+                          macd: [short, long, si],
+                        });
+                      }),
+                      tap(({ info, macd, sum, sumLists }) =>
+                        console.log(
+                          info,
+                          macd,
+                          sum.toString(),
+                          JSON.stringify(sumLists),
+                          'x -> 分组数据',
+                        ),
+                      ),
+                      scan((curr, next) => curr.plus(next.sum), new Big(0)),
+                      last(),
+                    ),
                   );
                 }),
+                max(([, a], [, b]) => (a.lt(b) ? -1 : 1)),
               );
             }),
           );
         }),
       )
-      .subscribe(({ info, macd, sum, sumLists }) =>
-        console.log(
-          info,
-          macd,
-          sum.toString(),
-          JSON.stringify(sumLists),
-          'x -> 分组数据',
-        ),
-      );
+      .subscribe(([x]) => console.log(x, 'x -> 最终数据'));
     // this.fetchKLine({
     //   symbol,
     //   interval,
