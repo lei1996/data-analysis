@@ -103,11 +103,11 @@ export const makeCuObservable = (
         tap((curr) => {
           currKLine = curr;
         }),
+        mergeKLine(15),
         share(),
       );
 
       const macd$ = main$.pipe(
-        mergeKLine(15),
         map(({ close }) => new Big(close)),
         MACD({
           indicator: EMA,
@@ -120,7 +120,7 @@ export const makeCuObservable = (
       );
 
       const adx$ = main$.pipe(
-        mergeKLine(15 * 4),
+        mergeKLine(4),
         map(({ close, high, low }) => ({ close, high, low })),
         ADX(14),
       );
@@ -147,6 +147,7 @@ export const makeCuObservable = (
             }),
           );
         }),
+        share(),
       );
 
       // macd$.subscribe((x) =>

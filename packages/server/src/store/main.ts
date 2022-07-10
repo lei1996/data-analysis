@@ -66,6 +66,7 @@ class MainStore {
           from(items).pipe(map((x: any) => x.contract_code)),
         ),
         take(1),
+        // map(() => 'ETH-USDT'),
         concatMap((symbol) => {
           return this.fetchKLine({
             symbol,
@@ -81,7 +82,7 @@ class MainStore {
                 .minus(new Big(1).times(timeHuobi[interval]).times(1000))
                 .toString();
 
-              for (let i = 0; i < 80; i++) {
+              for (let i = 0; i < 400; i++) {
                 const startTime = new Big(rightTimestamp)
                   .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
                   .toString();
@@ -145,7 +146,15 @@ class MainStore {
                 share(),
               );
 
-              return from(result).pipe(
+              const macd = [
+                {
+                  short: 16,
+                  long: 18,
+                  si: 9,
+                },
+              ];
+
+              return from(true ? macd : result).pipe(
                 concatMap(({ short, long, si }) => {
                   return zip(
                     of([short, long, si]),

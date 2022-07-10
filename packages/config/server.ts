@@ -18,6 +18,8 @@ export default {
     // 10001
     port: env.port || '',
 
+    macd: env.macd?.split(',') || [16, 18, 9],
+
     // 秘钥
     profileConfig: {
       accessKey: env.AccessKey || '',

@@ -172,7 +172,7 @@ function WebSocketDemo() {
       chartRef.current.createTechnicalIndicator(
         {
           name: 'MACD',
-          calcParams: [12, 26, 9],
+          calcParams: [16, 18, 9],
         },
         false,
         {
@@ -333,7 +333,7 @@ function WebSocketDemo() {
     ).pipe(
       delay(20),
       tap((x) => (kline = x)),
-      makeCuObservable(5),
+      makeCuObservable(16, 18, 9),
       concatMap((info: string) =>
         of({
           id: kline.id,
