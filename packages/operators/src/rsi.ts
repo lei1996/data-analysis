@@ -9,7 +9,7 @@ import {
 import { getNowTime } from '@data-analysis/utils';
 import { RSI } from 'rxjs-trading-signals';
 import { KLineBaseInterface } from './types/kline';
-import { Buy, mergeKLine } from './core';
+import { Buy, mergeKLine, Sell } from './core';
 import { OperatorsResult } from './types/core';
 
 export const makeRSIObservable = (interval: number = 14) => {
@@ -33,7 +33,7 @@ export const makeRSIObservable = (interval: number = 14) => {
         );
 
         const buy$ = source$.pipe(Buy(80, 50), share());
-        const sell$ = source$.pipe(Buy(50, 30), share());
+        const sell$ = source$.pipe(Sell(50, 30), share());
 
         const buySubscriber = buy$.subscribe({
           next(x) {
