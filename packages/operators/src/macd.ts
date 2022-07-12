@@ -19,6 +19,7 @@ import {
   scan,
   last,
   combineLatest,
+  defaultIfEmpty,
 } from '@data-analysis/core';
 import { getNowTime } from '@data-analysis/utils';
 import { divideEquallyRx } from '@data-analysis/core/src/divideEqually';
@@ -116,7 +117,6 @@ export const makeCuObservable = (
           signalInterval,
         }),
         skip(1),
-        share(),
       );
 
       const adx$ = main$.pipe(
@@ -125,24 +125,122 @@ export const makeCuObservable = (
         ADX(14),
       );
 
-      const maxmin$ = macd$.pipe(
-        map(({ histogram }) => histogram),
+      const source$ = combineLatest([macd$, adx$, main$]).pipe(share());
+
+      const maxmin$ = source$.pipe(
+        map(([{ histogram }, adx, kline]) => ({
+          histogram,
+          adx: new Big(adx),
+          kline,
+        })),
         bufferCount(50, 10),
         filter((x) => x.length === 50),
         concatMap((items) => {
           return zip(
-            from(items).pipe(max((a, b) => (a.lt(b) ? -1 : 1))),
-            from(items).pipe(min((a, b) => (a.lt(b) ? -1 : 1))),
+            from(items).pipe(
+              max(({ histogram: a }, { histogram: b }) => (a.lt(b) ? -1 : 1)),
+            ),
+            from(items).pipe(
+              min(({ histogram: a }, { histogram: b }) => (a.lt(b) ? -1 : 1)),
+            ),
           ).pipe(
-            concatMap(([max, min]) => {
+            concatMap(([{ histogram: max }, { histogram: min }]) => {
               return zip(
                 divideEquallyRx(0, max, 10),
                 divideEquallyRx(min, 0, 10),
               ).pipe(
-                map(([max, min]) => ({
-                  buy: max[max.length - 1],
-                  sell: min[0],
-                })),
+                concatMap(([max, min]) =>
+                  zip(from(max), from(min.reverse())).pipe(
+                    concatMap(([upper, lower]) => {
+                      let prev = 0;
+                      const buy = new BaseCs();
+                      const sell = new BaseCs();
+
+                      const share$ = from(items).pipe(
+                        concatMap(({ histogram: macd, adx, kline }) => {
+                          let info = 0;
+
+                          if (macd.gt(upper) && (prev === 3 || prev === 0)) {
+                            info = 1;
+                            prev = 1;
+                          } else if (
+                            macd.lt(lower) &&
+                            (prev === 1 || prev === 0)
+                          ) {
+                            info = 3;
+                            prev = 3;
+                          } else {
+                            info = 2;
+                          }
+
+                          return of({ info, adx, kline }).pipe(
+                            filter((x) => !!x.info),
+                          );
+                        }),
+                        share(),
+                      );
+
+                      return zip(
+                        share$.pipe(
+                          concatMap(({ info, adx, kline }) => {
+                            let result = '';
+                            let profit = new Big(0);
+
+                            if (!buy.isOpen && info === 3 && adx.lt(25)) {
+                              result = '开多';
+                              buy.prev = new Big(kline.close);
+                              buy.isOpen = true;
+                            } else if (buy.isOpen && info === 1) {
+                              result = '平空';
+                              profit = buy.getProfit(
+                                result,
+                                new Big(kline.close),
+                              );
+                              buy.profit = profit;
+                              buy.isOpen = false;
+                            }
+
+                            return of(profit).pipe(filter((x) => !x.eq(0)));
+                          }),
+                          scan((curr, next) => curr.plus(next), new Big(0)),
+                          defaultIfEmpty(new Big(0)),
+                          last(),
+                        ),
+                        share$.pipe(
+                          concatMap(({ info, adx, kline }) => {
+                            let result = '';
+                            let profit = new Big(0);
+
+                            if (!sell.isOpen && info === 1 && adx.lt(25)) {
+                              result = '开空';
+                              sell.prev = new Big(kline.close);
+                              sell.isOpen = true;
+                            } else if (sell.isOpen && info === 3) {
+                              result = '平多';
+                              profit = sell.getProfit(
+                                result,
+                                new Big(kline.close),
+                              );
+                              sell.profit = profit;
+                              sell.isOpen = false;
+                            }
+
+                            return of(profit).pipe(filter((x) => !x.eq(0)));
+                          }),
+                          scan((curr, next) => curr.plus(next), new Big(0)),
+                          defaultIfEmpty(new Big(0)),
+                          last(),
+                        ),
+                      ).pipe(
+                        map(([buy, sell]) => ({
+                          sum: buy.plus(sell),
+                          upper,
+                          lower,
+                        })),
+                      );
+                    }),
+                  ),
+                ),
               );
             }),
           );
@@ -158,40 +256,35 @@ export const makeCuObservable = (
       //   console.log(new Big(x).round(8).toString(), 'adx value ->'),
       // );
 
-      maxmin$.subscribe((x) => console.log(x, '最大最小值'));
+      // maxmin$.subscribe((x) => console.log(x, '最大最小值'));
 
-      const source$ = combineLatest(macd$, adx$, maxmin$).pipe(
-        concatMap(([macd, adx, { buy, sell }]) => {
+      const share$ = source$.pipe(
+        concatMap(([macd, adx]) => {
           const { histogram } = macd;
           let info = 0;
 
-          if (histogram.gt(buy)) {
+          if (histogram.gt(0)) {
             info = 1;
-          } else if (histogram.lt(sell)) {
+          } else if (histogram.lt(0)) {
             info = 3;
           } else {
             info = 2;
           }
 
-          console.log(info, new Big(adx).round(8).toString(), 'adx ->');
+          // console.log(info, new Big(adx).round(8).toString(), 'adx ->');
 
           return of({ info, adx }).pipe(filter((x) => !!x.info));
         }),
         share(),
       );
 
-      const buy$ = source$.pipe(
+      const buy$ = share$.pipe(
         concatMap(({ info, adx }) => {
           let result = '';
           let profit = new Big(0);
           // if (buy.isOpen) buy.count++;
 
-          if (
-            !buy.isOpen &&
-            info === 1 &&
-            buy.prevInfo !== 1 &&
-            new Big(adx).gt(25)
-          ) {
+          if (!buy.isOpen && info === 1 && buy.prevInfo !== 1) {
             result = '开多';
             buy.prev = new Big((currKLine as KLineBaseInterface).close);
             buy.isOpen = true;
@@ -215,9 +308,9 @@ export const makeCuObservable = (
       const buySubscriber = buy$.subscribe({
         next({ result }) {
           console.log(
-            `buy: ${result}. time: ${getNowTime(
-              (currKLine as KLineBaseInterface).id,
-            )}`,
+            `buy: ${result}. price: ${
+              (currKLine as KLineBaseInterface).close
+            } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
           );
 
           subscriber.next(result);
@@ -231,18 +324,13 @@ export const makeCuObservable = (
         },
       });
 
-      const sell$ = source$.pipe(
+      const sell$ = share$.pipe(
         concatMap(({ info, adx }) => {
           let result = '';
           let profit = new Big(0);
           // if (sell.isOpen) sell.count++;
 
-          if (
-            !sell.isOpen &&
-            info === 3 &&
-            sell.prevInfo !== 3 &&
-            new Big(adx).gt(25)
-          ) {
+          if (!sell.isOpen && info === 3 && sell.prevInfo !== 3) {
             result = '开空';
             sell.prev = new Big((currKLine as KLineBaseInterface).close);
             sell.isOpen = true;
@@ -266,9 +354,9 @@ export const makeCuObservable = (
       const sellSubscriber = sell$.subscribe({
         next({ result }) {
           console.log(
-            `sell: ${result}. time: ${getNowTime(
-              (currKLine as KLineBaseInterface).id,
-            )}`,
+            `sell: ${result}. price: ${
+              (currKLine as KLineBaseInterface).close
+            } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
           );
 
           subscriber.next(result);
