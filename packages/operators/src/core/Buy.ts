@@ -1,9 +1,10 @@
 import { Big, BigSource } from '@data-analysis/core';
 import { map, Observable, Subscriber } from 'rxjs';
+import { Offset } from '../types/core';
 
 export const Buy = (upper: number, lower: number) => {
   return (observable: Observable<BigSource>) =>
-    new Observable<string>((subscriber: Subscriber<string>) => {
+    new Observable<Offset>((subscriber: Subscriber<Offset>) => {
       let prev = 0;
       let isOpen = false;
 

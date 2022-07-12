@@ -1,5 +1,6 @@
 import { Big, BigSource, pipe, scan, toArray } from '@data-analysis/core';
 import { map, Observable, Subscriber } from 'rxjs';
+import { Direction, Offset } from '../types/core';
 
 export const fetchSum = () => {
   return pipe(
@@ -8,9 +9,6 @@ export const fetchSum = () => {
     toArray(),
   );
 };
-
-export type Direction = 'buy' | 'sell';
-export type Offset = 'open' | 'close';
 
 export type FetchProfitType = {
   offset: Offset;
