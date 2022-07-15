@@ -1,3 +1,4 @@
+import { tradeRx } from 'rxjs-trading-signals/dist/utils/trade';
 import {
   share,
   Observable,
@@ -5,16 +6,14 @@ import {
   Big,
   map,
   tap,
-  concatMap,
-  of,
 } from '@data-analysis/core';
 import { getNowTime } from '@data-analysis/utils';
 import { RSI } from 'rxjs-trading-signals';
 import { KLineBaseInterface } from './types/kline';
-import { BuySell, mergeKLine } from './core';
+import { mergeKLine } from './core';
 import { OperatorsResult } from './types/core';
 
-export const makeRSIObservable = (interval: number = 14) => {
+export const makeRSIObservable = (interval: number = 7) => {
   return (observable: Observable<KLineBaseInterface>) =>
     new Observable<OperatorsResult>(
       (subscriber: Subscriber<OperatorsResult>) => {
@@ -36,51 +35,44 @@ export const makeRSIObservable = (interval: number = 14) => {
           share(),
         );
 
-        const buy$ = source$.pipe(
-          concatMap((x) =>
-            of({
-              r: x,
-              upper: 80,
-              lower: 50,
-            }),
-          ),
-          BuySell(),
-        );
-        const sell$ = source$.pipe(
-          concatMap((x) =>
-            of({
-              r: x,
-              upper: 50,
-              lower: 30,
-            }),
-          ),
-          BuySell(),
-        );
+        const buy$ = source$.pipe(tradeRx(70, 50));
+        const sell$ = source$.pipe(tradeRx(50, 30));
 
         const buySubscriber = buy$.subscribe({
           next(x) {
             if (x === 3 && !buyIsOpen) {
-              subscriber.next({
-                offset: 'open',
-                direction: 'buy',
-              });
               buyIsOpen = true;
               console.log(
                 `buy: open. price: ${
                   (currKLine as KLineBaseInterface).close
                 } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
               );
-            } else if (x === 2 && buyIsOpen) {
               subscriber.next({
-                offset: 'close',
-                direction: 'sell',
+                offset: 'open',
+                direction: 'buy',
               });
+            } else if (x === 4 && buyIsOpen) {
               buyIsOpen = false;
               console.log(
                 `buy: close. price: ${
                   (currKLine as KLineBaseInterface).close
                 } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
               );
+              subscriber.next({
+                offset: 'close',
+                direction: 'sell',
+              });
+            } else if (x === 2 && buyIsOpen) {
+              buyIsOpen = false;
+              console.log(
+                `buy: close. price: ${
+                  (currKLine as KLineBaseInterface).close
+                } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
+              );
+              subscriber.next({
+                offset: 'close',
+                direction: 'sell',
+              });
             }
           },
           error(err) {
@@ -94,28 +86,39 @@ export const makeRSIObservable = (interval: number = 14) => {
 
         const sellSubscriber = sell$.subscribe({
           next(x) {
-            if (x === 1 && !sellIsOpen) {
-              subscriber.next({
-                offset: 'open',
-                direction: 'sell',
-              });
+            if (x === 2 && !sellIsOpen) {
               sellIsOpen = true;
               console.log(
                 `sell: open. price: ${
                   (currKLine as KLineBaseInterface).close
                 } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
               );
-            } else if (x === 4 && sellIsOpen) {
               subscriber.next({
-                offset: 'close',
-                direction: 'buy',
+                offset: 'open',
+                direction: 'sell',
               });
+            } else if (x === 1 && sellIsOpen) {
               sellIsOpen = false;
               console.log(
                 `sell: close. price: ${
                   (currKLine as KLineBaseInterface).close
                 } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
               );
+              subscriber.next({
+                offset: 'close',
+                direction: 'buy',
+              });
+            } else if (x === 3 && sellIsOpen) {
+              sellIsOpen = false;
+              console.log(
+                `sell: close. price: ${
+                  (currKLine as KLineBaseInterface).close
+                } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
+              );
+              subscriber.next({
+                offset: 'close',
+                direction: 'buy',
+              });
             }
           },
           error(err) {
