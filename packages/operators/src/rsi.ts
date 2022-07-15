@@ -11,12 +11,11 @@ import { getNowTime } from '@data-analysis/utils';
 import { RSI } from 'rxjs-trading-signals';
 import { KLineBaseInterface } from './types/kline';
 import { mergeKLine } from './core';
-import { OperatorsResult } from './types/core';
 
 export const makeRSIObservable = (interval: number = 7) => {
   return (observable: Observable<KLineBaseInterface>) =>
-    new Observable<OperatorsResult>(
-      (subscriber: Subscriber<OperatorsResult>) => {
+    new Observable<string>(
+      (subscriber: Subscriber<string>) => {
         let currKLine: KLineBaseInterface | {} = {}; // 当前推入的最新k线
         let buyIsOpen: boolean = false;
         let sellIsOpen: boolean = false;
@@ -47,10 +46,7 @@ export const makeRSIObservable = (interval: number = 7) => {
                   (currKLine as KLineBaseInterface).close
                 } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
               );
-              subscriber.next({
-                offset: 'open',
-                direction: 'buy',
-              });
+              subscriber.next('开多');
             } else if (x === 4 && buyIsOpen) {
               buyIsOpen = false;
               console.log(
@@ -58,10 +54,7 @@ export const makeRSIObservable = (interval: number = 7) => {
                   (currKLine as KLineBaseInterface).close
                 } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
               );
-              subscriber.next({
-                offset: 'close',
-                direction: 'sell',
-              });
+              subscriber.next('平空');
             } else if (x === 2 && buyIsOpen) {
               buyIsOpen = false;
               console.log(
@@ -69,10 +62,7 @@ export const makeRSIObservable = (interval: number = 7) => {
                   (currKLine as KLineBaseInterface).close
                 } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
               );
-              subscriber.next({
-                offset: 'close',
-                direction: 'sell',
-              });
+              subscriber.next('平空');
             }
           },
           error(err) {
@@ -86,39 +76,30 @@ export const makeRSIObservable = (interval: number = 7) => {
 
         const sellSubscriber = sell$.subscribe({
           next(x) {
-            if (x === 2 && !sellIsOpen) {
+            if (x === 3 && !sellIsOpen) {
               sellIsOpen = true;
               console.log(
                 `sell: open. price: ${
                   (currKLine as KLineBaseInterface).close
                 } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
               );
-              subscriber.next({
-                offset: 'open',
-                direction: 'sell',
-              });
-            } else if (x === 1 && sellIsOpen) {
+              subscriber.next('开空');
+            } else if (x === 4 && sellIsOpen) {
               sellIsOpen = false;
               console.log(
                 `sell: close. price: ${
                   (currKLine as KLineBaseInterface).close
                 } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
               );
-              subscriber.next({
-                offset: 'close',
-                direction: 'buy',
-              });
-            } else if (x === 3 && sellIsOpen) {
+              subscriber.next('平多');
+            } else if (x === 2 && sellIsOpen) {
               sellIsOpen = false;
               console.log(
                 `sell: close. price: ${
                   (currKLine as KLineBaseInterface).close
                 } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
               );
-              subscriber.next({
-                offset: 'close',
-                direction: 'buy',
-              });
+              subscriber.next('平多');
             }
           },
           error(err) {
