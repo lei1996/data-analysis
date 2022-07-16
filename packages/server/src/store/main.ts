@@ -5,7 +5,7 @@ import {
   Offset,
 } from 'rxjs-trading-signals/dist/utils/FetchSum';
 import { tradeRx } from 'rxjs-trading-signals/dist/utils/trade';
-import { RSI } from 'rxjs-trading-signals';
+import { RSI, MACD, EMA, ADX, SMA, MOM, ATR } from 'rxjs-trading-signals';
 import { OperatorsResult } from '@data-analysis/operators/src/types/core';
 import { makeCuObservable } from '@data-analysis/operators/src/macd';
 import {
@@ -29,6 +29,8 @@ import {
   last,
   max,
   zip,
+  combineLatest,
+  pairwise,
 } from '@data-analysis/core';
 import axios from '@data-analysis/utils/axios';
 import { correctionTime } from '@data-analysis/utils';
@@ -75,7 +77,7 @@ class MainStore {
           from(items).pipe(map((x: any) => x.contract_code)),
         ),
         take(1),
-        // map(() => 'ETH-USDT'),
+        map(() => 'ETH-USDT'),
         concatMap((symbol) => {
           return this.fetchKLine({
             symbol,
@@ -91,7 +93,7 @@ class MainStore {
                 .minus(new Big(1).times(timeHuobi[interval]).times(1000))
                 .toString();
 
-              for (let i = 0; i < 80; i++) {
+              for (let i = 0; i < 1000; i++) {
                 const startTime = new Big(rightTimestamp)
                   .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
                   .toString();
@@ -125,7 +127,7 @@ class MainStore {
               );
             }),
             concatMap((items) => {
-              const start = correctionTime(items[0].id * 1000) + 7 * 60;
+              const start = correctionTime(items[0].id * 1000) + 14 * 60;
 
               const result = [];
 
@@ -149,36 +151,90 @@ class MainStore {
               );
 
               return from(result).pipe(
-                // take(1),
+                take(1),
+                map(() => 5),
                 concatMap((interval) => {
-                  let price: BigSource = 0;
+                  let last: any = {};
                   let buyIsOpen = false;
                   let sellIsOpen = false;
 
-                  const share$ = source$.pipe(
-                    map((x) => new Big(x.close)),
-                    tap((x) => (price = x)),
-                    RSI(interval),
-                    share(),
+                  const macd$ = source$.pipe(
+                    mergeKLine(4 * 24),
+                    map(({ close }) => close),
+                    tap((x) => (last = x)),
+                    MACD({
+                      indicator: EMA,
+                      shortInterval: 14,
+                      longInterval: 16,
+                      signalInterval: 9,
+                    }),
+                    map(({ histogram }) => histogram),
+                    // share(),
                   );
+
+                  const adx$ = source$.pipe(
+                    map(({ high, low, close }) => ({ high, low, close })),
+                    tap((x) => (last = x)),
+                    ADX(interval),
+                  );
+
+                  const atr$ = source$.pipe(
+                    map(({ high, low, close }) => ({ high, low, close })),
+                    tap((x) => (last = x)),
+                    ATR(14),
+                  );
+
+                  const prev$ = source$.pipe(
+                    tap((x) => (last = x)),
+                    map(({ close }) =>
+                      new Big(
+                        new Big(close)
+                          .times(10000000)
+                          .round(0)
+                          .toString()
+                          .slice(0, 3),
+                      )
+                        .div(10)
+                        .round(0),
+                    ),
+                    tap((x) => console.log(x.toString(), 'debug sss -> ')),
+                    pairwise(),
+                    filter(([x1, x2]) => !x1.eq(x2)),
+                    map(([x1, x2]) => x2.gt(x1)),
+                  );
+
+                  const mom$ = source$.pipe(
+                    map(({ close }) => close),
+                    MOM(30),
+                  );
+                  const sma$ = source$.pipe(
+                    map(({ close }) => close),
+                    SMA(5),
+                  );
+
+                  const share$ = combineLatest([
+                    // adx$.pipe(tradeRx(50, 25)),
+                    prev$,
+                    // atr$.pipe(),
+                    // macd$,
+                    // mom$,
+                    // sma$,
+                  ]).pipe(share());
 
                   return zip(
                     share$.pipe(
-                      tradeRx(70, 50),
-                      concatMap((x) => {
-                        if (x === 3 && !buyIsOpen) {
+                      concatMap(([x]) => {
+                        console.log(last.close, x.toString(), 'debug ->');
+                        if (x && !buyIsOpen) {
                           buyIsOpen = true;
                           return of('open' as Offset);
-                        } else if (x === 4 && buyIsOpen) {
-                          buyIsOpen = false;
-                          return of('close' as Offset);
-                        } else if (x === 2 && buyIsOpen) {
+                        } else if (!x && buyIsOpen) {
                           buyIsOpen = false;
                           return of('close' as Offset);
                         }
                         return of();
                       }),
-                      map((x) => ({ offset: x, price })),
+                      map((x) => ({ offset: x, price: last.close })),
                       FetchProfit('buy'),
                       fetchSum(),
                       map((x) => ({
@@ -187,21 +243,17 @@ class MainStore {
                       })),
                     ),
                     share$.pipe(
-                      tradeRx(50, 30),
-                      concatMap((x) => {
-                        if (x === 3 && !sellIsOpen) {
+                      concatMap(([x]) => {
+                        if (!x && !sellIsOpen) {
                           sellIsOpen = true;
                           return of('open' as Offset);
-                        } else if (x === 4 && sellIsOpen) {
-                          sellIsOpen = false;
-                          return of('close' as Offset);
-                        } else if (x === 2 && sellIsOpen) {
+                        } else if (x && sellIsOpen) {
                           sellIsOpen = false;
                           return of('close' as Offset);
                         }
                         return of();
                       }),
-                      map((x) => ({ offset: x, price })),
+                      map((x) => ({ offset: x, price: last.close })),
                       FetchProfit('sell'),
                       fetchSum(),
                       map((x) => ({
