@@ -23,6 +23,7 @@ import {
   scan,
   last,
   timer,
+  retry,
 } from '@data-analysis/core';
 import {
   HuobiHttpClient,
@@ -418,18 +419,17 @@ class HuobiStore {
   autoFetchKlines(info: MarketHistoryKlineInterface) {
     return timer(5 * 1000, 1000 * 60 * 15).pipe(
       concatMap((index) => {
-        return this.huobiServices
-          .fetchMarketHistoryKline(info)
-          .pipe(
-            map(({ id, high, low, open, close, vol }) => ({
-              id: id * 1000,
-              open,
-              close,
-              high,
-              low,
-              volume: vol,
-            })),
-          );
+        return this.huobiServices.fetchMarketHistoryKline(info).pipe(
+          map(({ id, high, low, open, close, vol }) => ({
+            id: id * 1000,
+            open,
+            close,
+            high,
+            low,
+            volume: vol,
+          })),
+          retry(5), // retry 5 times on error
+        );
       }),
     );
   }
