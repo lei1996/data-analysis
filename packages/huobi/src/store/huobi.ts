@@ -22,6 +22,7 @@ import {
   min,
   scan,
   last,
+  timer,
 } from '@data-analysis/core';
 import {
   HuobiHttpClient,
@@ -39,6 +40,7 @@ import {
   Direction,
   Offset,
 } from '@data-analysis/crypto-huobi/src/types';
+import { makeTestObservable } from '@data-analysis/operators';
 
 import { makeCuObservable } from '@data-analysis/operators/src/macd';
 import { correctionTime } from '@data-analysis/utils';
@@ -337,15 +339,21 @@ class HuobiStore {
   }
 
   onLoad() {
-    this.map.set(this.symbol, new BaseCoin(this.symbol, this.interval));
+    // this.map.set(this.symbol, new BaseCoin(this.symbol, this.interval));
   }
 
   main() {
-    this.fetchHistoryKlines$(this.symbol, this.interval, 1650, 1)
+    // this.fetchHistoryKlines$(this.symbol, this.interval, 60, 1)
+    this.autoFetchKlines({
+      contract_code: this.symbol,
+      period: '15min',
+      size: 1,
+    })
       .pipe(
         // mergeKLine(15),
         tap((x) => console.log(x, this.symbol)),
-        makeCuObservable(),
+        // makeCuObservable(),
+        makeTestObservable(),
         concatMap((orderInfo) => {
           console.log(orderInfo, 'debug 在并发任务里面使用concatMap');
           const [a, b] = orderInfo.split('');
@@ -405,6 +413,25 @@ class HuobiStore {
         }),
       )
       .subscribe((x) => console.log(x, '开/平仓'));
+  }
+
+  autoFetchKlines(info: MarketHistoryKlineInterface) {
+    return timer(5 * 1000, 1000 * 60 * 15).pipe(
+      concatMap((index) => {
+        return this.huobiServices
+          .fetchMarketHistoryKline(info)
+          .pipe(
+            map(({ id, high, low, open, close, vol }) => ({
+              id: id * 1000,
+              open,
+              close,
+              high,
+              low,
+              volume: vol,
+            })),
+          );
+      }),
+    );
   }
 
   autoSwapCrossOrder(order: AutoSwapCrossOrderInterface): Observable<any> {
@@ -494,7 +521,7 @@ class HuobiStore {
     return share$.pipe(
       toArray(),
       concatMap((items) => {
-        const start = correctionTime(items[0].id) + 7 * 60;
+        const start = correctionTime(items[0].id) + 14 * 60;
 
         return from(items).pipe(filter((x) => x.id >= start * 1000));
       }),

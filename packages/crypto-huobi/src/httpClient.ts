@@ -113,11 +113,11 @@ export class HuobiHttpClient {
       }),
     ).pipe(
       concatMap((item: HuoBiKLineInterface[]) => from(item)),
-      filter(
-        (item: HuoBiKLineInterface) =>
-          ((new Date().getTime() / 1000) | 0) - item.id >=
-          timeHuobi[info.period],
-      ),
+      // filter(
+      //   (item: HuoBiKLineInterface) =>
+      //     ((new Date().getTime() / 1000) | 0) - item.id >=
+      //     timeHuobi[info.period],
+      // ),
     );
   }
 
