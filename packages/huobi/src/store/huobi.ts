@@ -97,7 +97,7 @@ class BaseCoin {
     this.marketDepthSubscribe(symbol);
     this.positionCrossSubscribe(symbol);
     this.accountsCrossSubscribe();
-    this.kLineSubscribe(symbol, interval);
+    // this.kLineSubscribe(symbol, interval);
   }
 
   // 最新的k线数据
@@ -324,6 +324,12 @@ export const mergeKLine = (interval: number = 15) => {
 class HuobiStore {
   private huobiServices: HuobiHttpClient;
   private map: Map<string, BaseCoin> = new Map<string, BaseCoin>();
+  openOrders: OpenOrdersInterface = {
+    buy: new Big(0),
+    sell: new Big(0),
+  };
+  leverRate: number = 20; // 杠杆倍数
+  openCount: number = 1; // 开仓的数量
 
   constructor(
     private readonly symbol: string,
@@ -341,13 +347,29 @@ class HuobiStore {
 
   onLoad() {
     // this.map.set(this.symbol, new BaseCoin(this.symbol, this.interval));
+
+    this.autoFetchPosition().subscribe((x) => {
+      console.log(x, 'debug 持仓 ->');
+      this.openOrders = {
+        ...this.openOrders,
+        [x.direction]: new Big(x.volume),
+      };
+
+      this.leverRate = x.lever_rate;
+    });
+
+    this.autoFetchAccountInfo().subscribe((x) => {
+      this.openCount =
+        new Big(x.margin_balance).div(100).round(0).toNumber() + 1 || 1;
+      console.log(x.margin_balance, this.openCount, 'debug 余额 ->');
+    });
   }
 
   main() {
     // this.fetchHistoryKlines$(this.symbol, this.interval, 60, 1)
     this.autoFetchKlines({
       contract_code: this.symbol,
-      period: '15min',
+      period: this.interval,
       size: 1,
     })
       .pipe(
@@ -360,17 +382,15 @@ class HuobiStore {
           const [a, b] = orderInfo.split('');
           const offset = orderEnum[a as OffsetEx];
           const direction = orderEnum[b as DirectionEx];
-          const map = this.getMapValue(this.symbol);
-          const leverRate = map.leverRate;
-          const openCount = map.openCount;
-          const { buy, sell } = map.openOrders;
+          // const map = this.getMapValue(this.symbol);
+          const leverRate = this.leverRate;
+          const openCount = this.openCount;
+          const { buy, sell } = this.openOrders;
 
           let qty: number = 0; // 数量
 
           if (orderInfo.includes('开')) {
-            qty = new Big(
-              map.openOrders[orderInfo.includes('多') ? 'buy' : 'sell'],
-            ).gte(openCount)
+            qty = new Big(orderInfo.includes('多') ? buy : sell).gte(openCount)
               ? 0
               : openCount;
 
@@ -416,9 +436,31 @@ class HuobiStore {
       .subscribe((x) => console.log(x, '开/平仓'));
   }
 
+  autoFetchPosition() {
+    return timer(2 * 1000, 1000 * 60).pipe(
+      concatMap(() => {
+        return this.fetchSwapCrossPositionInfo(this.symbol).pipe(
+          concatMap((items) => from(items)),
+          retry(3),
+        );
+      }),
+    );
+  }
+
+  autoFetchAccountInfo() {
+    return timer(2 * 1000, 1000 * 60).pipe(
+      concatMap(() => {
+        return this.fetchSwapCrossAccountInfo('USDT').pipe(
+          concatMap((items) => from(items)),
+          retry(3),
+        );
+      }),
+    );
+  }
+
   autoFetchKlines(info: MarketHistoryKlineInterface) {
     return timer(5 * 1000, 1000 * 60 * 15).pipe(
-      concatMap((index) => {
+      concatMap(() => {
         return this.huobiServices.fetchMarketHistoryKline(info).pipe(
           map(({ id, high, low, open, close, vol }) => ({
             id: id * 1000,
@@ -489,8 +531,8 @@ class HuobiStore {
   /**
    * 获取用户账户信息
    */
-  fetchSwapCrossAccountInfo() {
-    return this.huobiServices.fetchSwapCrossAccountInfo();
+  fetchSwapCrossAccountInfo(margin_account?: string) {
+    return this.huobiServices.fetchSwapCrossAccountInfo(margin_account);
   }
 
   /**
@@ -558,6 +600,13 @@ class HuobiStore {
       },
       to,
     ).pipe(concatWith(this.wsKlines$(contract_code)));
+  }
+
+  /**
+   * 获取用户持仓信息
+   */
+  fetchSwapCrossPositionInfo(contract_code?: string) {
+    return this.huobiServices.fetchSwapCrossPositionInfo(contract_code);
   }
 
   /**
