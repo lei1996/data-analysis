@@ -439,8 +439,12 @@ class HuobiStore {
   autoFetchPosition() {
     return timer(2 * 1000, 1000 * 60).pipe(
       concatMap(() => {
+        this.openOrders = {
+          buy: new Big(0),
+          sell: new Big(0),
+        };
         return this.fetchSwapCrossPositionInfo(this.symbol).pipe(
-          filter(x => !!x),
+          filter((x) => !!x),
           concatMap((items) => from(items)),
           retry(3),
         );
@@ -452,7 +456,7 @@ class HuobiStore {
     return timer(2 * 1000, 1000 * 60).pipe(
       concatMap(() => {
         return this.fetchSwapCrossAccountInfo('USDT').pipe(
-          filter(x => !!x),
+          filter((x) => !!x),
           concatMap((items) => from(items)),
           retry(3),
         );
