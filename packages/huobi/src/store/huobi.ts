@@ -440,6 +440,7 @@ class HuobiStore {
     return timer(2 * 1000, 1000 * 60).pipe(
       concatMap(() => {
         return this.fetchSwapCrossPositionInfo(this.symbol).pipe(
+          filter(x => !!x),
           concatMap((items) => from(items)),
           retry(3),
         );
@@ -451,6 +452,7 @@ class HuobiStore {
     return timer(2 * 1000, 1000 * 60).pipe(
       concatMap(() => {
         return this.fetchSwapCrossAccountInfo('USDT').pipe(
+          filter(x => !!x),
           concatMap((items) => from(items)),
           retry(3),
         );
@@ -478,10 +480,10 @@ class HuobiStore {
 
   autoSwapCrossOrder(order: AutoSwapCrossOrderInterface): Observable<any> {
     // 实例
-    const map = this.getMapValue(order.contract_code);
+    // const map = this.getMapValue(order.contract_code);
 
-    // bids: 买盘, asks: 卖盘
-    const { bids, asks } = map.depth;
+    // // bids: 买盘, asks: 卖盘
+    // const { bids, asks } = map.depth;
 
     // const price = (
     //   order.direction === 'buy' ? bids[0][0] : asks[0][0]
