@@ -65,6 +65,7 @@ class MainStore {
 
   constructor() {
     this.onLoad();
+    this.onChina();
   }
 
   onLoad() {
@@ -93,7 +94,7 @@ class MainStore {
                 .minus(new Big(1).times(timeHuobi[interval]).times(1000))
                 .toString();
 
-              for (let i = 0; i < 1000; i++) {
+              for (let i = 0; i < 200; i++) {
                 const startTime = new Big(rightTimestamp)
                   .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
                   .toString();
@@ -194,7 +195,7 @@ class MainStore {
                           .toString()
                           .slice(0, 3),
                       )
-                        .div(10)
+                        .div(1)
                         .round(0),
                     ),
                     tap((x) => console.log(x.toString(), 'debug sss -> ')),
@@ -239,7 +240,7 @@ class MainStore {
                       fetchSum(),
                       map((x) => ({
                         result: x,
-                        sum: !!x.length ? x[x.length - 1] : 0,
+                        sum: x.at(-1) || 0,
                       })),
                     ),
                     share$.pipe(
@@ -258,7 +259,7 @@ class MainStore {
                       fetchSum(),
                       map((x) => ({
                         result: x,
-                        sum: !!x.length ? x[x.length - 1] : 0,
+                        sum: x.at(-1) || 0,
                       })),
                     ),
                   ).pipe(
@@ -279,10 +280,73 @@ class MainStore {
       .subscribe((x) => console.log(x, 'x -> 最终数据'));
   }
 
+  onChina() {
+    // https://vsweb.linairx.top/api/kline/china?symbol=000957&interval=240&limit=300
+    this.fetchChina('600585', 15, 1200)
+      .pipe(
+        concatMap((items) => {
+          let last: any = {};
+          let buyIsOpen: boolean = false;
+
+          console.log(items, 'items ->');
+          
+
+          return from(items).pipe(
+            tap((x) => (last = x)),
+            map(({ close }) =>
+              new Big(
+                new Big(close).times(10000000).round(0).toString().slice(0, 3),
+              )
+                .div(1)
+                .round(0),
+            ),
+            // tap((x) => console.log(x.toString(), 'debug sss -> ')),
+            pairwise(),
+            filter(([x1, x2]) => !x1.eq(x2)),
+            map(([x1, x2]) => x2.gt(x1)),
+            concatMap((x) => {
+              if (x && !buyIsOpen) {
+                buyIsOpen = true;
+                console.log(last.day, last.close, x.toString(), 'open ->');
+                return of('open' as Offset);
+              } else if (!x && buyIsOpen) {
+                buyIsOpen = false;
+                console.log(last.day, last.close, x.toString(), 'close ->');
+                return of('close' as Offset);
+              }
+              return of();
+            }),
+            map((x) => ({ offset: x, price: last.close })),
+            FetchProfit('buy'),
+            fetchSum(),
+            map((x) => ({
+              result: x,
+              sum: x.at(-1) || 0,
+            })),
+          );
+        }),
+      )
+      .subscribe((x) => console.log(x, '股票结果'));
+  }
+
   fetchKLine(kline: KLineParamsInterface): Observable<KLineInterface[]> {
     return defer(() =>
       axios
         .get(`https://vsweb.linairx.top/api/kline/huobi${spliceURL(kline)}`)
+        .then((x) => x.data),
+    );
+  }
+
+  fetchChina(
+    symbol: string,
+    interval: number,
+    limit: number,
+  ): Observable<any[]> {
+    return defer(() =>
+      axios
+        .get(
+          `https://vsweb.linairx.top/api/kline/china?symbol=${symbol}&interval=${interval}&limit=${limit}`,
+        )
         .then((x) => x.data),
     );
   }
