@@ -28,13 +28,12 @@ export const makeTestObservable = () => {
       );
 
       const source$ = main$.pipe(
-        map(({ close }) =>
-          new Big(
-            new Big(close).times(10000000).round(0).toString().slice(0, 3),
-          )
-            .div(10)
-            .round(0),
-        ),
+        map(({ close }) => {
+          const num = new Big(close)
+          .times(10000000).round(0).toString().slice(0, 3);
+
+          return new Big(num).round(0);
+        }),
         tap((x) => console.log(x.toString(), 'debug price -> ')),
         pairwise(),
         filter(([x1, x2]) => !x1.eq(x2)),

@@ -24,6 +24,7 @@ import {
   last,
   timer,
   retry,
+  take,
 } from '@data-analysis/core';
 import {
   HuobiHttpClient,
@@ -348,14 +349,28 @@ class HuobiStore {
   onLoad() {
     // this.map.set(this.symbol, new BaseCoin(this.symbol, this.interval));
 
+    this.fetchSwapCrossAvailableLevelRate(this.symbol)
+      .pipe(
+        concatMap((items) =>
+          from(items).pipe(
+            map(
+              ({ available_level_rate }) =>
+                available_level_rate.split(',').at(-1) || '20',
+            ),
+          ),
+        ),
+      )
+      .subscribe((x) => {
+        console.log(x, '杠杆倍数');
+        this.leverRate = Number(x);
+      });
+
     this.autoFetchPosition().subscribe((x) => {
       console.log(x, 'debug 持仓 ->');
       this.openOrders = {
         ...this.openOrders,
         [x.direction]: new Big(x.volume),
       };
-
-      this.leverRate = x.lever_rate;
     });
 
     this.autoFetchAccountInfo().subscribe((x) => {
@@ -366,7 +381,6 @@ class HuobiStore {
   }
 
   main() {
-    // this.fetchHistoryKlines$(this.symbol, this.interval, 60, 1)
     this.autoFetchKlines({
       contract_code: this.symbol,
       period: this.interval,
@@ -525,16 +539,6 @@ class HuobiStore {
   }
 
   /**
-   * 获取上市的合约信息
-   */
-  fetchSwapContractInfo(info: SwapContractInfoInterface) {
-    return this.huobiServices.fetchSwapContractInfo(info).pipe(
-      concatMap((x) => from(x).pipe(filter((x) => x.contract_status === 1))),
-      // count(), // 105 个上市合约
-    );
-  }
-
-  /**
    * 获取用户账户信息
    */
   fetchSwapCrossAccountInfo(margin_account?: string) {
@@ -623,6 +627,13 @@ class HuobiStore {
   }
 
   /**
+   * 获取合约杠杆倍数
+   */
+  fetchSwapCrossAvailableLevelRate(contract_code?: string) {
+    return this.huobiServices.fetchSwapCrossAvailableLevelRate(contract_code);
+  }
+
+  /**
    * 撤销订单
    */
   fetchSwapCrossCancel(info: SwapCrossCancelInterface) {
@@ -639,7 +650,51 @@ class HuobiStore {
   }
 }
 
-export default new HuobiStore(
-  server.huobi.symbol,
-  server.huobi.interval as kLinePeriod,
-);
+class MainStore {
+  private huobiClient: HuobiHttpClient;
+
+  constructor() {
+    // 初始化 Http Client
+    this.huobiClient = new HuobiHttpClient(server.huobi.apiBaseUrl, {
+      accessKey: server.huobi.profileConfig.accessKey,
+      secretKey: server.huobi.profileConfig.secretKey,
+    });
+
+    this.onLoad();
+  }
+
+  onLoad() {
+    this.fetchSwapContractInfo({})
+      .pipe(
+        map(({ contract_code }) => contract_code),
+        take(15),
+      )
+      .subscribe((x) => {
+        new HuobiStore(x, '15min');
+        console.log(x, '所有');
+      });
+  }
+
+  /**
+   * 获取用户账户信息
+   */
+  fetchSwapCrossAccountInfo(margin_account?: string) {
+    return this.huobiClient.fetchSwapCrossAccountInfo(margin_account);
+  }
+
+  /**
+   * 获取上市的合约信息
+   */
+  fetchSwapContractInfo(info: SwapContractInfoInterface) {
+    return this.huobiClient.fetchSwapContractInfo(info).pipe(
+      concatMap((x) => from(x).pipe(filter((x) => x.contract_status === 1))),
+      // count(), // 105 个上市合约
+    );
+  }
+}
+
+export default new MainStore();
+// export default new HuobiStore(
+//   server.huobi.symbol,
+//   server.huobi.interval as kLinePeriod,
+// );
