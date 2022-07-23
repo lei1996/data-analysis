@@ -65,7 +65,7 @@ class MainStore {
 
   constructor() {
     this.onLoad();
-    this.onChina();
+    // this.onChina();
   }
 
   onLoad() {
@@ -77,8 +77,8 @@ class MainStore {
         concatMap((items) =>
           from(items).pipe(map((x: any) => x.contract_code)),
         ),
-        take(1),
-        map(() => 'ETH-USDT'),
+        // take(1),
+        // map(() => 'BTC-USDT'),
         concatMap((symbol) => {
           return this.fetchKLine({
             symbol,
@@ -94,7 +94,7 @@ class MainStore {
                 .minus(new Big(1).times(timeHuobi[interval]).times(1000))
                 .toString();
 
-              for (let i = 0; i < 200; i++) {
+              for (let i = 0; i < 5; i++) {
                 const startTime = new Big(rightTimestamp)
                   .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
                   .toString();
@@ -157,7 +157,9 @@ class MainStore {
                 concatMap((interval) => {
                   let last: any = {};
                   let buyIsOpen = false;
+                  let buyPrev: Big = new Big(1);
                   let sellIsOpen = false;
+                  let sellPrev: Big = new Big(1);
 
                   const macd$ = source$.pipe(
                     mergeKLine(4 * 24),
@@ -187,17 +189,15 @@ class MainStore {
 
                   const prev$ = source$.pipe(
                     tap((x) => (last = x)),
-                    map(({ close }) =>
-                      new Big(
-                        new Big(close)
-                          .times(10000000)
-                          .round(0)
-                          .toString()
-                          .slice(0, 3),
-                      )
-                        .div(1)
-                        .round(0),
-                    ),
+                    map(({ close }) => {
+                      const num = new Big(close)
+                        .times(10000000)
+                        .round(0)
+                        .toString()
+                        .slice(0, 2);
+
+                      return new Big(num).round(0);
+                    }),
                     tap((x) => console.log(x.toString(), 'debug sss -> ')),
                     pairwise(),
                     filter(([x1, x2]) => !x1.eq(x2)),
@@ -226,10 +226,10 @@ class MainStore {
                     share$.pipe(
                       concatMap(([x]) => {
                         console.log(last.close, x.toString(), 'debug ->');
-                        if (x && !buyIsOpen) {
+                        if (!x && !buyIsOpen) {
                           buyIsOpen = true;
                           return of('open' as Offset);
-                        } else if (!x && buyIsOpen) {
+                        } else if (x && buyIsOpen) {
                           buyIsOpen = false;
                           return of('close' as Offset);
                         }
@@ -245,10 +245,10 @@ class MainStore {
                     ),
                     share$.pipe(
                       concatMap(([x]) => {
-                        if (!x && !sellIsOpen) {
+                        if (x && !sellIsOpen) {
                           sellIsOpen = true;
                           return of('open' as Offset);
-                        } else if (x && sellIsOpen) {
+                        } else if (!x && sellIsOpen) {
                           sellIsOpen = false;
                           return of('close' as Offset);
                         }
@@ -256,6 +256,9 @@ class MainStore {
                       }),
                       map((x) => ({ offset: x, price: last.close })),
                       FetchProfit('sell'),
+                      tap((x) => {
+                        sellPrev = new Big(x);
+                      }),
                       fetchSum(),
                       map((x) => ({
                         result: x,
@@ -264,6 +267,7 @@ class MainStore {
                     ),
                   ).pipe(
                     map(([x1, x2]) => ({
+                      symbol,
                       x1,
                       x2,
                       interval,
@@ -276,8 +280,20 @@ class MainStore {
             }),
           );
         }),
+        filter((x) => {
+          const x1 = x.x1.result.reduce(
+            (curr, next) => (next < 0 ? curr + 1 : curr),
+            0,
+          );
+          const x2 = x.x2.result.reduce(
+            (curr, next) => (next < 0 ? curr + 1 : curr),
+            0,
+          );
+
+          return x.sum > 0 && x1 + x2 < 5;
+        }),
       )
-      .subscribe((x) => console.log(x, 'x -> 最终数据'));
+      .subscribe((x) => console.log(x, x.symbol, 'x -> 最终数据'));
   }
 
   onChina() {
@@ -289,7 +305,6 @@ class MainStore {
           let buyIsOpen: boolean = false;
 
           console.log(items, 'items ->');
-          
 
           return from(items).pipe(
             tap((x) => (last = x)),
