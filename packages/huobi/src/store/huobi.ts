@@ -479,7 +479,16 @@ class HuobiStore {
   }
 
   autoFetchKlines(info: MarketHistoryKlineInterface) {
-    return timer(5 * 1000, 1000 * 60 * 15).pipe(
+    const currentDate = new Date();
+    const startOfNextMinute = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      currentDate.getDate(),
+      currentDate.getHours(),
+      currentDate.getMinutes() + (15 - (currentDate.getMinutes() % 15)) - 1,
+    );
+
+    return timer(startOfNextMinute, 1000 * 60 * 15).pipe(
       concatMap(() => {
         return this.huobiServices.fetchMarketHistoryKline(info).pipe(
           map(({ id, high, low, open, close, vol }) => ({
@@ -673,6 +682,19 @@ class MainStore {
         new HuobiStore(x, '15min');
         console.log(x, '所有');
       });
+
+    // const currentDate = new Date();
+    // const startOfNextMinute = new Date(
+    //   currentDate.getFullYear(),
+    //   currentDate.getMonth(),
+    //   currentDate.getDate(),
+    //   currentDate.getHours(),
+    //   currentDate.getMinutes() + (15 - (currentDate.getMinutes() % 15)) - 1,
+    // );
+
+    // console.log(startOfNextMinute, 'startOfNextMinute');
+
+    // timer(startOfNextMinute, 1000).subscribe(console.log);
   }
 
   /**
