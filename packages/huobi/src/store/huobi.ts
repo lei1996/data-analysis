@@ -25,6 +25,7 @@ import {
   timer,
   retry,
   take,
+  share,
 } from '@data-analysis/core';
 import {
   HuobiHttpClient,
@@ -41,8 +42,10 @@ import {
   SwapCrossOrderInfoInterface,
   Direction,
   Offset,
+  SwapCrossSwitchLeverRateInterface,
 } from '@data-analysis/crypto-huobi/src/types';
 import { makeTestObservable } from '@data-analysis/operators';
+import { FetchProfit, fetchSum } from '@data-analysis/operators/src/core';
 
 import { makeCuObservable } from '@data-analysis/operators/src/macd';
 import { correctionTime } from '@data-analysis/utils';
@@ -673,28 +676,144 @@ class MainStore {
   }
 
   onLoad() {
+    // 切换杠杆到 max
+    // this.fetchSwapCrossAvailableLevelRate()
+    //   .pipe(
+    //     concatMap((items) =>
+    //       from(items).pipe(
+    //         map(({ contract_code, available_level_rate }) => ({
+    //           symbol: contract_code,
+    //           leverRate: Number(available_level_rate.split(',').at(-1) || '20'),
+    //         })),
+    //       ),
+    //     ),
+    //     concatMap(({ symbol, leverRate }) =>
+    //       this.fetchSwapCrossSwitchLeverRate({
+    //         contract_code: symbol,
+    //         lever_rate: leverRate,
+    //       }),
+    //     ),
+    //   )
+    //   .subscribe((x) => console.log(x, '切换杠杆到max'));
+
+    // 一键清仓
+    this.fetchSwapCrossPositionInfo()
+      .pipe(
+        filter((x) => !!x),
+        concatMap((items) =>
+          from(items).pipe(
+            concatMap((x) =>
+              this.fetchSwapCrossOrder({
+                contract_code: x.contract_code,
+                volume: x.available,
+                direction: x.direction === 'buy' ? 'sell' : 'buy',
+                offset: 'close',
+                lever_rate: x.lever_rate,
+                order_price_type: 'optimal_20',
+              }),
+            ),
+          ),
+        ),
+      )
+      .subscribe((x) => console.log(x, '一键清仓'));
+
+    // 获取所有合约信息
     this.fetchSwapContractInfo({})
       .pipe(
         map(({ contract_code }) => contract_code),
-        take(15),
+        // take(1),
+        concatMap((symbol) => {
+          let lastPrice: Big = new Big(0);
+          let buyIsOpen = false;
+          let sellIsOpen = false;
+          const main$ = this.fetchHistoryKline({
+            contract_code: symbol,
+            period: '15min',
+            size: 300,
+          }).pipe(
+            map(({ close }) => {
+              lastPrice = new Big(close);
+              const num = new Big(close)
+                .times(10000000)
+                .round(0)
+                .toString()
+                .slice(0, 2);
+
+              return new Big(num).round(0);
+            }),
+            // tap((x) => console.log(x.toString(), 'debug sss -> ')),
+            pairwise(),
+            filter(([x1, x2]) => !x1.eq(x2)),
+            map(([x1, x2]) => x2.gt(x1)),
+            share(),
+          );
+
+          return zip(
+            main$.pipe(
+              concatMap((x) => {
+                if (!x && !buyIsOpen) {
+                  buyIsOpen = true;
+                  return of('open' as Offset);
+                } else if (x && buyIsOpen) {
+                  buyIsOpen = false;
+                  return of('close' as Offset);
+                }
+                return of();
+              }),
+              map((x) => ({ offset: x, price: lastPrice })),
+              FetchProfit('buy'),
+              fetchSum(),
+              map((x) => ({
+                result: x,
+                sum: x.at(-1) || 0,
+              })),
+            ),
+            main$.pipe(
+              concatMap((x) => {
+                if (x && !sellIsOpen) {
+                  sellIsOpen = true;
+                  return of('open' as Offset);
+                } else if (!x && sellIsOpen) {
+                  sellIsOpen = false;
+                  return of('close' as Offset);
+                }
+                return of();
+              }),
+              map((x) => ({ offset: x, price: lastPrice })),
+              FetchProfit('sell'),
+              fetchSum(),
+              map((x) => ({
+                result: x,
+                sum: x.at(-1) || 0,
+              })),
+            ),
+          ).pipe(
+            map(([x1, x2]) => ({
+              symbol,
+              x1,
+              x2,
+              sum: new Big(x1.sum).plus(x2.sum).toNumber(),
+            })),
+          );
+        }),
+        filter((x) => {
+          const x1 = x.x1.result.reduce(
+            (curr, next) => (next < 0 ? curr + 1 : curr),
+            0,
+          );
+          const x2 = x.x2.result.reduce(
+            (curr, next) => (next < 0 ? curr + 1 : curr),
+            0,
+          );
+
+          return x.sum > 0 && x1 + x2 < 5;
+        }),
+        take(18),
       )
       .subscribe((x) => {
-        new HuobiStore(x, '15min');
-        console.log(x, '所有');
+        console.log(x, '结果');
+        new HuobiStore(x.symbol, '15min');
       });
-
-    // const currentDate = new Date();
-    // const startOfNextMinute = new Date(
-    //   currentDate.getFullYear(),
-    //   currentDate.getMonth(),
-    //   currentDate.getDate(),
-    //   currentDate.getHours(),
-    //   currentDate.getMinutes() + (15 - (currentDate.getMinutes() % 15)) - 1,
-    // );
-
-    // console.log(startOfNextMinute, 'startOfNextMinute');
-
-    // timer(startOfNextMinute, 1000).subscribe(console.log);
   }
 
   /**
@@ -713,10 +832,52 @@ class MainStore {
       // count(), // 105 个上市合约
     );
   }
+
+  /**
+   * 获取k线数据
+   */
+  fetchHistoryKline(
+    info: MarketHistoryKlineInterface,
+  ): Observable<KLineInterface> {
+    return this.huobiClient.fetchMarketHistoryKline(info).pipe(
+      map(({ id, high, low, open, close, vol }) => ({
+        id: id * 1000,
+        open,
+        close,
+        high,
+        low,
+        volume: vol,
+      })),
+    );
+  }
+
+  /**
+   * 获取用户持仓信息
+   */
+  fetchSwapCrossPositionInfo(contract_code?: string) {
+    return this.huobiClient.fetchSwapCrossPositionInfo(contract_code);
+  }
+
+  /**
+   * 获取合约杠杆倍数
+   */
+  fetchSwapCrossAvailableLevelRate(contract_code?: string) {
+    return this.huobiClient.fetchSwapCrossAvailableLevelRate(contract_code);
+  }
+
+  /**
+   * [全仓] 切换杠杆
+   */
+  fetchSwapCrossSwitchLeverRate(info: SwapCrossSwitchLeverRateInterface) {
+    return this.huobiClient.fetchSwapCrossSwitchLeverRate(info);
+  }
+
+  /**
+   * 合约下单
+   */
+  fetchSwapCrossOrder(info: SwapCrossOrderInterface) {
+    return this.huobiClient.fetchSwapCrossOrder(info);
+  }
 }
 
 export default new MainStore();
-// export default new HuobiStore(
-//   server.huobi.symbol,
-//   server.huobi.interval as kLinePeriod,
-// );

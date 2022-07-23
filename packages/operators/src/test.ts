@@ -30,7 +30,10 @@ export const makeTestObservable = () => {
       const source$ = main$.pipe(
         map(({ close }) => {
           const num = new Big(close)
-          .times(10000000).round(0).toString().slice(0, 3);
+            .times(10000000)
+            .round(0)
+            .toString()
+            .slice(0, 2);
 
           return new Big(num).round(0);
         }),
@@ -43,14 +46,16 @@ export const makeTestObservable = () => {
 
       const buySubscriber = source$.subscribe({
         next(x) {
-          if (x) {
+          // if (x) {
+          if (!x) {
             console.log(
               `buy: open. price: ${
                 (currKLine as KLineBaseInterface).close
               } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
             );
             subscriber.next('开多');
-          } else if (!x) {
+            // } else if (!x) {
+          } else if (x) {
             console.log(
               `buy: close. price: ${
                 (currKLine as KLineBaseInterface).close
@@ -70,14 +75,16 @@ export const makeTestObservable = () => {
 
       const sellSubscriber = source$.subscribe({
         next(x) {
-          if (!x) {
+          // if (!x) {
+          if (x) {
             console.log(
               `sell: open. price: ${
                 (currKLine as KLineBaseInterface).close
               } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
             );
             subscriber.next('开空');
-          } else if (x) {
+            // } else if (x) {
+          } else if (!x) {
             console.log(
               `sell: close. price: ${
                 (currKLine as KLineBaseInterface).close
