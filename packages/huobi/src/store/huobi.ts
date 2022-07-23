@@ -333,7 +333,6 @@ class HuobiStore {
     sell: new Big(0),
   };
   leverRate: number = 20; // 杠杆倍数
-  openCount: number = 1; // 开仓的数量
 
   constructor(
     private readonly symbol: string,
@@ -375,12 +374,6 @@ class HuobiStore {
         [x.direction]: new Big(x.volume),
       };
     });
-
-    this.autoFetchAccountInfo().subscribe((x) => {
-      this.openCount =
-        new Big(x.margin_balance).div(100).round(0).toNumber() + 1 || 1;
-      console.log(x.margin_balance, this.openCount, 'debug 余额 ->');
-    });
   }
 
   main() {
@@ -401,7 +394,7 @@ class HuobiStore {
           const direction = orderEnum[b as DirectionEx];
           // const map = this.getMapValue(this.symbol);
           const leverRate = this.leverRate;
-          const openCount = this.openCount;
+          const openCount = mainStore.openCount;
           const { buy, sell } = this.openOrders;
 
           let qty: number = 0; // 数量
@@ -461,18 +454,6 @@ class HuobiStore {
           sell: new Big(0),
         };
         return this.fetchSwapCrossPositionInfo(this.symbol).pipe(
-          filter((x) => !!x),
-          concatMap((items) => from(items)),
-          retry(3),
-        );
-      }),
-    );
-  }
-
-  autoFetchAccountInfo() {
-    return timer(2 * 1000, 1000 * 60).pipe(
-      concatMap(() => {
-        return this.fetchSwapCrossAccountInfo('USDT').pipe(
           filter((x) => !!x),
           concatMap((items) => from(items)),
           retry(3),
@@ -664,6 +645,7 @@ class HuobiStore {
 
 class MainStore {
   private huobiClient: HuobiHttpClient;
+  openCount: number = 1; // 开仓的数量
 
   constructor() {
     // 初始化 Http Client
@@ -695,6 +677,12 @@ class MainStore {
     //     ),
     //   )
     //   .subscribe((x) => console.log(x, '切换杠杆到max'));
+
+    this.autoFetchAccountInfo().subscribe((x) => {
+      this.openCount =
+        new Big(x.margin_balance).div(100).round(0).toNumber() + 1 || 1;
+      console.log(x.margin_balance, this.openCount, 'debug 余额 ->');
+    });
 
     // 一键清仓
     this.fetchSwapCrossPositionInfo()
@@ -806,9 +794,9 @@ class MainStore {
             0,
           );
 
-          return x.sum > 0 && x1 + x2 < 5;
+          return x.sum > 0 && x1 + x2 < 8;
         }),
-        take(18),
+        take(35),
       )
       .subscribe((x) => {
         console.log(x, '结果');
@@ -878,6 +866,19 @@ class MainStore {
   fetchSwapCrossOrder(info: SwapCrossOrderInterface) {
     return this.huobiClient.fetchSwapCrossOrder(info);
   }
+
+  autoFetchAccountInfo() {
+    return timer(2 * 1000, 1000 * 60).pipe(
+      concatMap(() => {
+        return this.fetchSwapCrossAccountInfo('USDT').pipe(
+          filter((x) => !!x),
+          concatMap((items) => from(items)),
+          retry(3),
+        );
+      }),
+    );
+  }
 }
 
-export default new MainStore();
+const mainStore = new MainStore();
+export default mainStore;
