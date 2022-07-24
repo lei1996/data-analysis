@@ -1,3 +1,4 @@
+import { MACD, EMA } from 'rxjs-trading-signals';
 import server from '@data-analysis/config/server';
 
 import {
@@ -47,7 +48,7 @@ import {
 import { makeTestObservable } from '@data-analysis/operators';
 import { FetchProfit, fetchSum } from '@data-analysis/operators/src/core';
 
-import { makeCuObservable } from '@data-analysis/operators/src/macd';
+import { makeMACDObservable } from '@data-analysis/operators/src/macd';
 import { correctionTime } from '@data-analysis/utils';
 
 const orderEnum = {
@@ -385,8 +386,8 @@ class HuobiStore {
       .pipe(
         // mergeKLine(15),
         tap((x) => console.log(x, this.symbol)),
-        // makeCuObservable(),
-        makeTestObservable(),
+        makeMACDObservable(),
+        // makeTestObservable(),
         concatMap((orderInfo) => {
           console.log(orderInfo, 'debug 在并发任务里面使用concatMap');
           const [a, b] = orderInfo.split('');
@@ -721,28 +722,24 @@ class MainStore {
           }).pipe(
             map(({ close }) => {
               lastPrice = new Big(close);
-              const num = new Big(close)
-                .times(10000000)
-                .round(0)
-                .toString()
-                .slice(0, 2);
-
-              return new Big(num).round(0);
+              return new Big(close);
             }),
-            // tap((x) => console.log(x.toString(), 'debug sss -> ')),
-            pairwise(),
-            filter(([x1, x2]) => !x1.eq(x2)),
-            map(([x1, x2]) => x2.gt(x1)),
+            MACD({
+              indicator: EMA,
+              shortInterval: 12,
+              longInterval: 26,
+              signalInterval: 9,
+            }),
             share(),
           );
 
           return zip(
             main$.pipe(
-              concatMap((x) => {
-                if (!x && !buyIsOpen) {
+              concatMap(({ histogram }) => {
+                if (histogram.lt(0) && !buyIsOpen) {
                   buyIsOpen = true;
                   return of('open' as Offset);
-                } else if (x && buyIsOpen) {
+                } else if (histogram.gt(0) && buyIsOpen) {
                   buyIsOpen = false;
                   return of('close' as Offset);
                 }
@@ -757,11 +754,11 @@ class MainStore {
               })),
             ),
             main$.pipe(
-              concatMap((x) => {
-                if (x && !sellIsOpen) {
+              concatMap(({ histogram }) => {
+                if (histogram.gt(0) && !sellIsOpen) {
                   sellIsOpen = true;
                   return of('open' as Offset);
-                } else if (!x && sellIsOpen) {
+                } else if (histogram.lt(0) && sellIsOpen) {
                   sellIsOpen = false;
                   return of('close' as Offset);
                 }
@@ -794,7 +791,7 @@ class MainStore {
             0,
           );
 
-          return x.sum > 0 && x1 + x2 < 8;
+          return x.sum > 0 && x1 + x2 < 5;
         }),
         take(35),
       )
