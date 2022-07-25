@@ -617,8 +617,8 @@ class MainStore {
       secretKey: server.huobi.profileConfig.secretKey,
     });
 
-    // this.onLoad();
-    this.test();
+    this.onLoad();
+    // this.test();
   }
 
   onLoad() {
@@ -762,7 +762,7 @@ class MainStore {
       )
       .subscribe((x) => {
         console.log(x, '结果');
-        new HuobiStore(x.symbol, '15min');
+        new HuobiStore(x.symbol, '1min');
       });
   }
 
