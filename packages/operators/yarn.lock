@@ -7,10 +7,10 @@ big.js@6.2.0:
   resolved "https://registry.yarnpkg.com/big.js/-/big.js-6.2.0.tgz#39c60822aecb0f34a1d79a90fe9908a0ddf45e1d"
   integrity sha512-paIKvJiAaOYdLt6MfnvxkDo64lTOV257XYJyX3oJnJQocIclUn+48k6ZerH/c5FxWE6DGJu1TKDYis7tqHg9kg==
 
-rxjs-trading-signals@^0.3.2:
-  version "0.3.2"
-  resolved "https://registry.yarnpkg.com/rxjs-trading-signals/-/rxjs-trading-signals-0.3.2.tgz#772ca7c2b30b189ab9c12c1598915221d3eeac5b"
-  integrity sha512-P4bG+6pS5BNp01FUqxE7hdrChFRtLhwIB9Ma5q69vcNtJAb9nMmkNy6ZnE9Vy1tNqnck1uEvbxZmen0BKa4s5Q==
+rxjs-trading-signals@^0.3.3:
+  version "0.3.3"
+  resolved "https://registry.yarnpkg.com/rxjs-trading-signals/-/rxjs-trading-signals-0.3.3.tgz#c37f84aa1d130b04d710a36b64275bdb73833970"
+  integrity sha512-mpZ1TDxvAeF8vHqDnfj/vKN8pcrd06+bQiqzjOe1wjXNgzsCfSSeoswanumiCIuyUbHIzVUmvgLS6yKY7DTGnA==
   dependencies:
     big.js "6.2.0"
     rxjs "7.5.5"

@@ -2,8 +2,8 @@
   "name": "@data-analysis/huobi",
   "version": "1.0.0",
   "scripts": {
-    "dev:huobi": "cross-env NODE_ENV=development nodemon src/index.ts --exec \"ts-node --files\"",
-    "start:huobi": "cross-env NODE_ENV=production ts-node --transpile-only src/index.ts"
+    "dev:huobi": "cross-env NODE_ENV=development symbol=BTC-USDT interval=15min port=10001 AccessKey=ba4e5982-226e4ab4-3d4b1467-cdgs9k03f3 SecretKey=4d97343f-5701889a-58fefd48-4d673 nodemon src/index.ts --exec \"ts-node --files\"",
+    "start:huobi": "cross-env NODE_ENV=production symbol=BTC-USDT interval=15min port=20001 AccessKey=ba4e5982-226e4ab4-3d4b1467-cdgs9k03f3 SecretKey=4d97343f-5701889a-58fefd48-4d673 ts-node --transpile-only src/index.ts"
   },
   "dependencies": {
     "@data-analysis/config": "^1.0.0",
@@ -19,6 +19,7 @@
     "koa-logger": "^3.2.1",
     "koa-send": "^5.0.1",
     "koa-static": "^5.0.0",
+    "rxjs-trading-signals": "^0.3.3",
     "socket.io": "^4.2.0"
   },
   "devDependencies": {

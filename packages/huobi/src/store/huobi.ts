@@ -1,3 +1,4 @@
+import { tradeRx } from 'rxjs-trading-signals/dist/utils/trade';
 import { MACD, EMA } from 'rxjs-trading-signals';
 import server from '@data-analysis/config/server';
 
@@ -474,18 +475,28 @@ class HuobiStore {
     );
 
     return timer(startOfNextMinute, 1000 * 60 * 15).pipe(
-      concatMap(() => {
-        return this.huobiServices.fetchMarketHistoryKline(info).pipe(
-          map(({ id, high, low, open, close, vol }) => ({
-            id: id * 1000,
-            open,
-            close,
-            high,
-            low,
-            volume: vol,
-          })),
-          retry(5), // retry 5 times on error
-        );
+      concatMap((index) => {
+        return this.huobiServices
+          .fetchMarketHistoryKline({
+            ...info,
+            size: index === 0 ? 15 * 26 + 2 : 15 * 1 + 2,
+          })
+          .pipe(
+            concatMap((items) =>
+              from(items).pipe(
+                filter((_, i) => i !== 0 && i % 15 === 0),
+                map(({ id, high, low, open, close, vol }) => ({
+                  id: id * 1000,
+                  open,
+                  close,
+                  high,
+                  low,
+                  volume: vol,
+                })),
+              ),
+            ),
+            retry(5), // retry 5 times on error
+          );
       }),
     );
   }
@@ -547,34 +558,6 @@ class HuobiStore {
   }
 
   /**
-   * 获取k线数据
-   */
-  fetchHistoryKline(
-    info: MarketHistoryKlineInterface,
-    to?: kLinePeriod,
-  ): Observable<KLineInterface> {
-    const share$ = this.huobiServices.fetchMarketHistoryKline(info).pipe(
-      map(({ id, high, low, open, close, vol }) => ({
-        id: id * 1000,
-        open,
-        close,
-        high,
-        low,
-        volume: vol,
-      })),
-    );
-
-    return share$.pipe(
-      toArray(),
-      concatMap((items) => {
-        const start = correctionTime(items[0].id) + 14 * 60;
-
-        return from(items).pipe(filter((x) => x.id >= start * 1000));
-      }),
-    );
-  }
-
-  /**
    * websocket 推送k线数据
    */
   wsKlines$(symbol: string) {
@@ -583,27 +566,6 @@ class HuobiStore {
       filter((items) => items[0].id !== items[1].id),
       map((x) => x[0]),
     );
-  }
-
-  /**
-   * 获取k线数据流
-   */
-  fetchHistoryKlines$(
-    contract_code: string,
-    period: kLinePeriod,
-    size: number = 300,
-    offset: number = 14,
-    mergeLength: number = 1,
-    to?: kLinePeriod,
-  ) {
-    return this.fetchHistoryKline(
-      {
-        contract_code,
-        period,
-        size: size * mergeLength + (offset - 1),
-      },
-      to,
-    ).pipe(concatWith(this.wsKlines$(contract_code)));
   }
 
   /**
@@ -655,7 +617,8 @@ class MainStore {
       secretKey: server.huobi.profileConfig.secretKey,
     });
 
-    this.onLoad();
+    // this.onLoad();
+    this.test();
   }
 
   onLoad() {
@@ -730,16 +693,18 @@ class MainStore {
               longInterval: 26,
               signalInterval: 9,
             }),
+            map(({ histogram }) => histogram),
+            tradeRx(0, 0),
             share(),
           );
 
           return zip(
             main$.pipe(
-              concatMap(({ histogram }) => {
-                if (histogram.lt(0) && !buyIsOpen) {
+              concatMap((x) => {
+                if (x === 4 && !buyIsOpen) {
                   buyIsOpen = true;
                   return of('open' as Offset);
-                } else if (histogram.gt(0) && buyIsOpen) {
+                } else if (x === 1 && buyIsOpen) {
                   buyIsOpen = false;
                   return of('close' as Offset);
                 }
@@ -754,11 +719,11 @@ class MainStore {
               })),
             ),
             main$.pipe(
-              concatMap(({ histogram }) => {
-                if (histogram.gt(0) && !sellIsOpen) {
+              concatMap((x) => {
+                if (x === 1 && !sellIsOpen) {
                   sellIsOpen = true;
                   return of('open' as Offset);
-                } else if (histogram.lt(0) && sellIsOpen) {
+                } else if (x === 4 && sellIsOpen) {
                   sellIsOpen = false;
                   return of('close' as Offset);
                 }
@@ -801,6 +766,29 @@ class MainStore {
       });
   }
 
+  test() {
+    const currentDate = new Date();
+    const startOfNextMinute = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      currentDate.getDate(),
+      currentDate.getHours(),
+      currentDate.getMinutes() + (15 - (currentDate.getMinutes() % 15)) - 1,
+    );
+
+    timer(startOfNextMinute, 1000 * 60 * 15)
+      .pipe(
+        concatMap((index) => {
+          return this.fetchHistoryKline({
+            contract_code: 'BTC-USDT',
+            period: '1min',
+            size: 32,
+          }).pipe(filter((_, i) => i !== 0 && i % 15 === 0));
+        }),
+      )
+      .subscribe((x) => console.log(x, '查看结果'));
+  }
+
   /**
    * 获取用户账户信息
    */
@@ -825,14 +813,18 @@ class MainStore {
     info: MarketHistoryKlineInterface,
   ): Observable<KLineInterface> {
     return this.huobiClient.fetchMarketHistoryKline(info).pipe(
-      map(({ id, high, low, open, close, vol }) => ({
-        id: id * 1000,
-        open,
-        close,
-        high,
-        low,
-        volume: vol,
-      })),
+      concatMap((items) =>
+        from(items).pipe(
+          map(({ id, high, low, open, close, vol }) => ({
+            id: id * 1000,
+            open,
+            close,
+            high,
+            low,
+            volume: vol,
+          })),
+        ),
+      ),
     );
   }
 

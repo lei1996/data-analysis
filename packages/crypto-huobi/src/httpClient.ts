@@ -104,20 +104,13 @@ export class HuobiHttpClient {
    */
   fetchMarketHistoryKline(
     info: MarketHistoryKlineInterface,
-  ): Observable<HuoBiKLineInterface> {
+  ): Observable<HuoBiKLineInterface[]> {
     return defer(() =>
       this.client.restApi({
         path: `/linear-swap-ex/market/history/kline`,
         method: 'GET',
         query: { ...info },
       }),
-    ).pipe(
-      concatMap((item: HuoBiKLineInterface[]) => from(item)),
-      // filter(
-      //   (item: HuoBiKLineInterface) =>
-      //     ((new Date().getTime() / 1000) | 0) - item.id >=
-      //     timeHuobi[info.period],
-      // ),
     );
   }
 

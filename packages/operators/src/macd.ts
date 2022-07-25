@@ -8,6 +8,7 @@ import {
 } from '@data-analysis/core';
 import { getNowTime } from '@data-analysis/utils';
 import { EMA, MACD } from 'rxjs-trading-signals';
+import { tradeRx } from 'rxjs-trading-signals/dist/utils/trade';
 import { KLineBaseInterface } from './types/kline';
 
 export const makeMACDObservable = () => {
@@ -30,19 +31,21 @@ export const makeMACDObservable = () => {
           longInterval: 26,
           signalInterval: 9,
         }),
+        map(({ histogram }) => histogram),
+        tradeRx(0, 0),
         share(),
       );
 
       const buySubscriber = source$.subscribe({
-        next({ histogram }) {
-          if (histogram.lt(0)) {
+        next(x) {
+          if (x === 4) {
             console.log(
               `buy: open. price: ${
                 (currKLine as KLineBaseInterface).close
               } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
             );
             subscriber.next('开多');
-          } else if (histogram.gt(0)) {
+          } else if (x === 1) {
             console.log(
               `buy: close. price: ${
                 (currKLine as KLineBaseInterface).close
@@ -61,16 +64,15 @@ export const makeMACDObservable = () => {
       });
 
       const sellSubscriber = source$.subscribe({
-        next({ histogram }) {
-          if (histogram.gt(0)) {
+        next(x) {
+          if (x === 1) {
             console.log(
               `sell: open. price: ${
                 (currKLine as KLineBaseInterface).close
               } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
             );
             subscriber.next('开空');
-            // } else if (x) {
-          } else if (histogram.lt(0)) {
+          } else if (x === 4) {
             console.log(
               `sell: close. price: ${
                 (currKLine as KLineBaseInterface).close
