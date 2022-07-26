@@ -756,7 +756,7 @@ class MainStore {
             0,
           );
 
-          return x.sum > 0 && x1 + x2 < 5;
+          return x1 + x2 < 5 && x.x1.sum > 0 && x.x2.sum > 0;
         }),
         take(35),
       )
