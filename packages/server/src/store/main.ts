@@ -7,7 +7,6 @@ import {
 import { tradeRx } from 'rxjs-trading-signals/dist/utils/trade';
 import { RSI, MACD, EMA, ADX, SMA, MOM, ATR } from 'rxjs-trading-signals';
 import { OperatorsResult } from '@data-analysis/operators/src/types/core';
-import { makeCuObservable } from '@data-analysis/operators/src/macd';
 import {
   defer,
   concatMap,
@@ -78,7 +77,7 @@ class MainStore {
           from(items).pipe(map((x: any) => x.contract_code)),
         ),
         // take(1),
-        // map(() => 'BTC-USDT'),
+        // map(() => 'ETH-USDT'),
         concatMap((symbol) => {
           return this.fetchKLine({
             symbol,
@@ -94,7 +93,7 @@ class MainStore {
                 .minus(new Big(1).times(timeHuobi[interval]).times(1000))
                 .toString();
 
-              for (let i = 0; i < 5; i++) {
+              for (let i = 0; i < 30; i++) {
                 const startTime = new Big(rightTimestamp)
                   .minus(new Big(limit).times(timeHuobi[interval]).times(1000))
                   .toString();
@@ -188,15 +187,26 @@ class MainStore {
                   );
 
                   const prev$ = source$.pipe(
-                    tap((x) => (last = x)),
-                    map(({ close }) => {
-                      const num = new Big(close)
-                        .times(10000000)
-                        .round(0)
+                    map((x) => {
+                      last = x;
+                      const num = new Big(x.close)
+                        .times(100000000)
                         .toString()
-                        .slice(0, 2);
+                        .slice(0, 3);
+                      const dec = (+num / 10).toFixed(1);
+                      const integer = (+num / 10) | 0;
 
-                      return new Big(num).round(0);
+                      console.log(
+                        num,
+                        dec,
+                        dec.replace(/\d+\.(\d*)/, '$1'),
+                        integer,
+                        'debug ->',
+                      );
+
+                      return new Big(dec.replace(/\d+\.(\d*)/, '$1')).gt(3)
+                        ? new Big(integer).plus(1)
+                        : new Big(integer);
                     }),
                     tap((x) => console.log(x.toString(), 'debug sss -> ')),
                     pairwise(),
@@ -226,10 +236,10 @@ class MainStore {
                     share$.pipe(
                       concatMap(([x]) => {
                         console.log(last.close, x.toString(), 'debug ->');
-                        if (!x && !buyIsOpen) {
+                        if (x && !buyIsOpen) {
                           buyIsOpen = true;
                           return of('open' as Offset);
-                        } else if (x && buyIsOpen) {
+                        } else if (!x && buyIsOpen) {
                           buyIsOpen = false;
                           return of('close' as Offset);
                         }
@@ -245,10 +255,10 @@ class MainStore {
                     ),
                     share$.pipe(
                       concatMap(([x]) => {
-                        if (x && !sellIsOpen) {
+                        if (!x && !sellIsOpen) {
                           sellIsOpen = true;
                           return of('open' as Offset);
-                        } else if (!x && sellIsOpen) {
+                        } else if (x && sellIsOpen) {
                           sellIsOpen = false;
                           return of('close' as Offset);
                         }
@@ -290,7 +300,10 @@ class MainStore {
             0,
           );
 
-          return x.sum > 0 && x1 + x2 < 5;
+          // return x.sum > 0 && x1 + x2 < 5;
+          return (
+            x.sum > 0 && new Big(x.sum).gt(Math.max(x.x1.sum, x.x2.sum) * 0.5)
+          );
         }),
       )
       .subscribe((x) => console.log(x, x.symbol, 'x -> 最终数据'));
