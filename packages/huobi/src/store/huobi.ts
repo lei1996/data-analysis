@@ -387,8 +387,8 @@ class HuobiStore {
       .pipe(
         // mergeKLine(15),
         tap((x) => console.log(x, this.symbol)),
-        makeMACDObservable(),
-        // makeTestObservable(),
+        // makeMACDObservable(),
+        makeTestObservable(),
         concatMap((orderInfo) => {
           console.log(orderInfo, 'debug 在并发任务里面使用concatMap');
           const [a, b] = orderInfo.split('');
@@ -479,7 +479,8 @@ class HuobiStore {
         return this.huobiServices
           .fetchMarketHistoryKline({
             ...info,
-            size: index === 0 ? 15 * 26 + 2 : 15 * 1 + 2,
+            // size: index === 0 ? 15 * 26 + 2 : 15 * 1 + 2,
+            size: 15 * 1 + 2,
           })
           .pipe(
             concatMap((items) =>
@@ -687,6 +688,9 @@ class MainStore {
               lastPrice = new Big(close);
               return new Big(close);
             }),
+            share(),
+          );
+          const macd$ = main$.pipe(
             MACD({
               indicator: EMA,
               shortInterval: 12,
@@ -698,13 +702,40 @@ class MainStore {
             share(),
           );
 
+          const custom$ = main$.pipe(
+            map((close) => {
+              const num = new Big(close)
+                .times(100000000)
+                .toString()
+                .slice(0, 3);
+              const dec = (+num / 10).toFixed(1);
+              const integer = (+num / 10) | 0;
+
+              console.log(
+                num,
+                dec,
+                dec.replace(/\d+\.(\d*)/, '$1'),
+                integer,
+                'debug ->',
+              );
+
+              return new Big(dec.replace(/\d+\.(\d*)/, '$1')).gt(3)
+                ? new Big(integer).plus(1)
+                : new Big(integer);
+            }),
+            tap((x) => console.log(x.toString(), 'debug sss -> ')),
+            pairwise(),
+            filter(([x1, x2]) => !x1.eq(x2)),
+            map(([x1, x2]) => x2.gt(x1)),
+          );
+
           return zip(
-            main$.pipe(
+            custom$.pipe(
               concatMap((x) => {
-                if (x === 4 && !buyIsOpen) {
+                if (x && !buyIsOpen) {
                   buyIsOpen = true;
                   return of('open' as Offset);
-                } else if (x === 1 && buyIsOpen) {
+                } else if (!x && buyIsOpen) {
                   buyIsOpen = false;
                   return of('close' as Offset);
                 }
@@ -718,12 +749,12 @@ class MainStore {
                 sum: x.at(-1) || 0,
               })),
             ),
-            main$.pipe(
+            custom$.pipe(
               concatMap((x) => {
-                if (x === 1 && !sellIsOpen) {
+                if (!x && !sellIsOpen) {
                   sellIsOpen = true;
                   return of('open' as Offset);
-                } else if (x === 4 && sellIsOpen) {
+                } else if (x && sellIsOpen) {
                   sellIsOpen = false;
                   return of('close' as Offset);
                 }
@@ -756,7 +787,10 @@ class MainStore {
             0,
           );
 
-          return x1 + x2 < 5 && x.x1.sum > 0 && x.x2.sum > 0;
+          // return x1 + x2 < 5 && x.x1.sum > 0 && x.x2.sum > 0;
+          return (
+            x.sum > 0 && new Big(x.sum).gt(Math.max(x.x1.sum, x.x2.sum) * 0.5)
+          );
         }),
         take(35),
       )

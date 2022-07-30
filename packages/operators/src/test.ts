@@ -28,14 +28,22 @@ export const makeTestObservable = () => {
       );
 
       const source$ = main$.pipe(
-        map(({ close }) => {
-          const num = new Big(close)
-            .times(10000000)
-            .round(0)
-            .toString()
-            .slice(0, 2);
+        map((x) => {
+          const num = new Big(x.close).times(100000000).toString().slice(0, 3);
+          const dec = (+num / 10).toFixed(1);
+          const integer = (+num / 10) | 0;
 
-          return new Big(num).round(0);
+          console.log(
+            num,
+            dec,
+            dec.replace(/\d+\.(\d*)/, '$1'),
+            integer,
+            'debug ->',
+          );
+
+          return new Big(dec.replace(/\d+\.(\d*)/, '$1')).gt(3)
+            ? new Big(integer).plus(1)
+            : new Big(integer);
         }),
         tap((x) => console.log(x.toString(), 'debug price -> ')),
         pairwise(),
@@ -46,16 +54,14 @@ export const makeTestObservable = () => {
 
       const buySubscriber = source$.subscribe({
         next(x) {
-          // if (x) {
-          if (!x) {
+          if (x) {
             console.log(
               `buy: open. price: ${
                 (currKLine as KLineBaseInterface).close
               } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
             );
             subscriber.next('开多');
-            // } else if (!x) {
-          } else if (x) {
+          } else if (!x) {
             console.log(
               `buy: close. price: ${
                 (currKLine as KLineBaseInterface).close
@@ -75,16 +81,14 @@ export const makeTestObservable = () => {
 
       const sellSubscriber = source$.subscribe({
         next(x) {
-          // if (!x) {
-          if (x) {
+          if (!x) {
             console.log(
               `sell: open. price: ${
                 (currKLine as KLineBaseInterface).close
               } time: ${getNowTime((currKLine as KLineBaseInterface).id)}`,
             );
             subscriber.next('开空');
-            // } else if (x) {
-          } else if (!x) {
+          } else if (x) {
             console.log(
               `sell: close. price: ${
                 (currKLine as KLineBaseInterface).close

@@ -29,7 +29,7 @@ import { KLineChart } from './KLineChart';
 
 import huobiStore from '../store/huobiStore';
 import kLineStore from '../store/kLineStore';
-import { makeRSIObservable } from '@data-analysis/operators';
+import { makeRSIObservable, makeTestObservable } from '@data-analysis/operators';
 
 const styles = {
   klineChartContainer: css`
@@ -334,7 +334,7 @@ function WebSocketDemo() {
     ).pipe(
       delay(20),
       tap((x) => (kline = x)),
-      makeRSIObservable(5),
+      makeTestObservable(),
       concatMap((info: string) =>
         of({
           id: kline.id,
