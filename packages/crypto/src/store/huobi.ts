@@ -43,9 +43,7 @@ class HuobiStore {
    * 获取k线数据
    */
   fetchHistoryKline(info: MarketHistoryKlineInterface) {
-    return this.huobiServices
-      .fetchMarketHistoryKline(info)
-      .pipe(map((x) => ({ ...x, symbol: info.contract_code })));
+    return this.huobiServices.fetchMarketHistoryKline(info);
   }
 
   /**
